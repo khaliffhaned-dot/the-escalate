@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Escalate — Governed Crisis Response for Malaysian PR</title>
+  <meta name="description" content="The Escalate: a Google ADK agent that drafts bilingual crisis holding statements for Malaysian PR desks, and structurally cannot send one alone. Barcelona Principles 4.0 compliant." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">N</div>
+      <div class="logo-text">
+        <span class="logo-name">THE ESCALATE</span>
+        <span class="logo-tagline">Denyut Malaysia</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" id="nav-mentions" onclick="showPage('mentions')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Mentions
+      </button>
+      <button class="nav-item" id="nav-evaluation" onclick="showPage('evaluation')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Evaluation
+      </button>
+      <button class="nav-item" id="nav-warrooms" onclick="showPage('warrooms')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        War Rooms
+      </button>
+      <button class="nav-item" id="nav-holdings" onclick="showPage('holdings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Holdings
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="workspace-badge">
+        <div class="ws-dot"></div>
+        <div>
+          <div class="ws-name">Aurora Group</div>
+          <div class="ws-id">ws_aurora</div>
+        </div>
+      </div>
+      <div class="role-selector">
+        <label>Role</label>
+        <select id="role-select" onchange="updateRole(this.value)">
+          <option value="ws_admin">WS Admin</option>
+          <option value="editor">Editor</option>
+          <option value="analyst">Analyst</option>
+          <option value="viewer">Viewer</option>
+        </select>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main" id="main">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="page-title" id="page-title">Dashboard</div>
+        <div class="page-sub" id="page-sub">Jalur Kita Merdeka 2026 · 18–24 Aug 2026</div>
+      </div>
+      <div class="topbar-right">
+        <div class="barcelona-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Barcelona 4.0 · AVE Disabled
+        </div>
+        <button class="btn-refresh" id="btn-refresh" onclick="refreshAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- DASHBOARD PAGE -->
+    <section class="page active" id="page-dashboard">
+      <div class="stat-cards" id="stat-cards">
+        <div class="stat-card loading"></div>
+        <div class="stat-card loading"></div>
+        <div class="stat-card loading"></div>
+        <div class="stat-card loading"></div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card" id="card-objectives">
+          <div class="card-header">
+            <h2>Objectives</h2>
+            <span class="card-tag">AMEC IEF</span>
+          </div>
+          <div class="objectives-list" id="objectives-list">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+
+        <div class="card" id="card-ladder">
+          <div class="card-header">
+            <h2>PESO Ladder</h2>
+            <span class="card-tag">Weighted Score</span>
+          </div>
+          <div class="ladder-bars" id="ladder-bars">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+
+        <div class="card" id="card-moves">
+          <div class="card-header">
+            <h2>Board Moves</h2>
+            <span class="card-tag">Next 14 days</span>
+          </div>
+          <div class="moves-list" id="moves-list">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line"></div>
+          </div>
+        </div>
+
+        <div class="card" id="card-narrative">
+          <div class="card-header">
+            <h2>Narrative</h2>
+            <span class="card-tag">bilingual</span>
+          </div>
+          <div id="narrative-content">
+            <div class="skeleton-line"></div>
+            <div class="skeleton-line short"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MENTIONS PAGE -->
+    <section class="page" id="page-mentions">
+      <div class="page-toolbar">
+        <div class="filter-group">
+          <button class="filter-btn active" onclick="filterMentions('all', this)">All</button>
+          <button class="filter-btn" onclick="filterMentions('three_r', this)">3R Flagged</button>
+          <button class="filter-btn" onclick="filterMentions('east_my', this)">East MY</button>
+        </div>
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="mention-search" placeholder="Search mentions…" oninput="renderMentions()" />
+        </div>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <button class="btn-secondary" onclick="openIngestModal()">+ Ingest Webhook</button>
+          <button class="btn-primary" onclick="syncFeeds()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Sync Feeds
+          </button>
+        </div>
+      </div>
+
+      <div class="mentions-grid" id="mentions-grid">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- EVALUATION PAGE -->
+    <section class="page" id="page-evaluation">
+      <div class="eval-hero" id="eval-hero">
+        <div class="skeleton-line"></div>
+      </div>
+      <div class="dashboard-grid" id="eval-grid">
+        <div class="card loading" style="height:200px"></div>
+        <div class="card loading" style="height:200px"></div>
+      </div>
+      <div class="lock-panel">
+        <button class="btn-primary" id="btn-lock" onclick="lockEvaluation()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Lock Evaluation Snapshot
+        </button>
+        <button class="btn-secondary" id="btn-exec-brief" onclick="openExecutiveBriefModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Executive Brief / Export Report
+        </button>
+        <span class="lock-note">Locked snapshots are immutable under Barcelona 4.0</span>
+      </div>
+    </section>
+
+    <!-- WAR ROOMS PAGE -->
+    <section class="page" id="page-warrooms">
+      <div class="page-toolbar">
+        <button class="btn-primary" onclick="openNewWarRoomModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New War Room
+        </button>
+      </div>
+      <div class="warrooms-list" id="warrooms-list">
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- HOLDINGS PAGE -->
+    <section class="page" id="page-holdings">
+      <div class="page-toolbar">
+        <button class="btn-primary" onclick="openNewBriefModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Draft Holding Brief
+        </button>
+      </div>
+      <div class="holdings-list" id="holdings-list">
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal()">
+    <div class="modal" id="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modal-title">Modal</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
