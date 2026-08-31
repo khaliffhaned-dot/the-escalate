@@ -34,10 +34,28 @@ logger = logging.getLogger(__name__)
 AGENT_MODEL = "gemini-3.5-flash"
 
 
+class HoldingOp(BaseModel):
+    """One operational next step. Modelled explicitly rather than as a loose
+    dict so the agent's `ops` are schema-constrained the same way its prose is."""
+
+    action: str = Field(description="Concrete operational next step for the desk.")
+    owner_role: str = Field(description="One of: ws_admin, editor, analyst.")
+    sla_hours: int = Field(description="Hours within which this step must be completed.")
+    objective_ids: list[str] = Field(
+        default_factory=list, description="Campaign objective IDs this step serves, e.g. O4."
+    )
+
+
 class HoldingDraftOutput(BaseModel):
     """Structured output schema the agent must produce. Passed as ADK's
     `output_schema`, this constrains generation directly rather than
-    parsing free-text JSON and hoping it's well-formed."""
+    parsing free-text JSON and hoping it's well-formed.
+
+    `do_not_say`, `ops` and `posture` are in this schema deliberately.
+    Without them the ADK path returned a strictly *thinner* brief than the
+    deterministic fallback in `holding_service.py`, which meant the
+    highest-priority provider produced the weakest safety guidance.
+    """
 
     line_en: str = Field(description="English holding statement line, factual, no speculation.")
     line_bm: str = Field(description="Bahasa Malaysia holding statement line, same facts as line_en.")
@@ -45,6 +63,21 @@ class HoldingDraftOutput(BaseModel):
     gaps: list[str] = Field(
         default_factory=list,
         description="Known unknowns the draft deliberately does not claim to have an answer for.",
+    )
+    do_not_say: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Lines the desk must NOT say: ungrounded claims, anything referencing AVE/EMV/PR "
+            "value, and any attribution of a directive to a government, regulator or Royal "
+            "institution."
+        ),
+    )
+    ops: list[HoldingOp] = Field(
+        default_factory=list, description="Operational next steps for the desk, at most 5."
+    )
+    posture: str = Field(
+        default="self_regulated_not_directed",
+        description="Framing posture, normally self_regulated_not_directed.",
     )
 
 
@@ -121,6 +154,10 @@ async def draft_holding_with_adk(
     *,
     mentions: list[Mention],
     war_room_id: str | None,
+    locale: str = "bilingual",
+    audience: str = "press",
+    tabletop: bool = False,
+    extra_context: str | None = None,
 ) -> HoldingBrief:
     """Runs the ADK agent end-to-end and converts its output into the same
     HoldingBrief model the rest of NADI already uses, so callers (routes,
@@ -141,11 +178,19 @@ async def draft_holding_with_adk(
     runner = Runner(agent=agent, app_name="nadi", session_service=session_service)
 
     mention_summary = "\n".join(f"- {m.id}: ({m.lang}) {m.text[:200]}" for m in mentions)
+    tabletop_note = (
+        "\nThis is a TABLETOP SIMULATION for desk training. It must never be issued externally."
+        if tabletop
+        else ""
+    )
+    context_note = f"Additional comms context: {extra_context}\n" if extra_context else ""
     user_message = types.Content(
         role="user",
         parts=[types.Part(text=(
-            f"Draft a bilingual (EN/BM) holding statement for this war room. "
-            f"Mentions involved:\n{mention_summary}\n\n"
+            f"Draft a holding statement for this war room.\n"
+            f"Target locale: {locale}. Target audience: {audience}.{tabletop_note}\n"
+            f"{context_note}"
+            f"\nMentions involved:\n{mention_summary}\n\n"
             f"Use get_mention_detail to confirm facts before writing about any of them."
         ))],
     )
@@ -170,11 +215,21 @@ async def draft_holding_with_adk(
     # Defense in depth: these three fields are NEVER taken from the
     # agent's output, regardless of what it produced. Same rule the
     # deterministic path and the Pydantic model itself already enforce.
+    #
+    # The text-level guards (AVE scan of the generated prose, and the
+    # TABLETOP marker) are applied by the caller in `llm_holding.py` via
+    # `sanitize_and_guard_output`, so every provider shares one
+    # implementation of them instead of each path carrying its own copy.
     return HoldingBrief(
         war_room_id=war_room_id,
+        locale=locale,
+        audience=audience,
         lines={"en": final_output.line_en, "bm": final_output.line_bm},
         facts_used=final_output.facts_used,
         gaps=final_output.gaps,
+        do_not_say=final_output.do_not_say,
+        ops=[op.model_dump() for op in final_output.ops],
+        posture=final_output.posture,
         ave=False,
         auto_publish=False,
         human_must_send=True,

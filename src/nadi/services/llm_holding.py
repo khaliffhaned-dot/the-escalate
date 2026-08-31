@@ -371,13 +371,27 @@ async def generate_holding_with_llm(
         try:
             from nadi.services.adk_holding_agent import draft_holding_with_adk
 
-            # This is a real tool-using ADK agent, not a prompt-in/JSON-out
-            # call, it already returns a complete, guarded HoldingBrief
-            # (ave/auto_publish/human_must_send are hardcoded inside that
-            # module regardless of model output), so return directly
-            # rather than feed its output back through the dict-based
-            # guard path built for the other providers.
-            return await draft_holding_with_adk(mentions=mentions, war_room_id=war_room_id)
+            # A real tool-using ADK agent, not a prompt-in/JSON-out call. It
+            # returns a HoldingBrief whose ave/auto_publish/human_must_send
+            # booleans are already hardcoded inside that module.
+            #
+            # The *text* guards are a separate concern and must still run here:
+            # returning this brief directly used to skip both the AVE scan of
+            # the model's own prose and the TABLETOP marker, which meant a
+            # simulation draft could come back indistinguishable from a real
+            # one. Every provider now passes through sanitize_and_guard_output.
+            brief = await draft_holding_with_adk(
+                mentions=mentions,
+                war_room_id=war_room_id,
+                locale=locale,
+                audience=audience,
+                tabletop=tabletop,
+                extra_context=extra_context,
+            )
+            brief.lines = sanitize_and_guard_output(
+                {"lines": dict(brief.lines)}, tabletop=tabletop
+            )["lines"]
+            return brief
         except Exception as err:
             logger.warning("ADK agent run failed, falling back: %s", err)
             # fall through to vertex/gemini/openai/mock below
