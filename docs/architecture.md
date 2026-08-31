@@ -1,8 +1,8 @@
 # Architecture
 
-The Escalate is a FastAPI service on Cloud Run that serves both its API and its
-operator console from one origin. The interesting part is not the request path —
-it is where the **guards** sit relative to the agent.
+The Escalate is a FastAPI service that serves both its API and its operator
+console from one origin, persisting to Cloud Firestore. The interesting part is
+not the request path — it is where the **guards** sit relative to the agent.
 
 ## System diagram
 
@@ -12,7 +12,7 @@ flowchart TB
         UI["Dashboard · Mentions · Evaluation<br/>War Rooms · Holdings"]
     end
 
-    subgraph run["Cloud Run · FastAPI"]
+    subgraph run["FastAPI service"]
         direction TB
         RBAC["RBAC dependency<br/>X-Nadi-Role → permission matrix"]
 
@@ -38,7 +38,8 @@ flowchart TB
 
     subgraph google["Google Cloud"]
         ADK["ADK Agent<br/>nadi_holding_drafter"]
-        GEM["Gemini 3.5 Flash<br/>via Vertex AI"]
+        GEM["Gemini 3.5 Flash"]
+        FS[("Cloud Firestore<br/>org_id + workspace_id<br/>on every document")]
     end
 
     HUMAN(["Human operator<br/>the only path to send"])
@@ -58,12 +59,15 @@ flowchart TB
     SM -->|"sent_external<br/>requires a human"| HUMAN
     EVAL --> SNAP --> REP
     CS -->|"POST /reports/schedules/run-due"| REP
+    SM <-->|"write-through"| FS
+    WR <--> FS
+    SNAP --> FS
 
     classDef guard fill:#7f1d1d,stroke:#ef4444,color:#fff
     classDef gcp fill:#1e3a5f,stroke:#4285f4,color:#fff
     classDef human fill:#14532d,stroke:#22c55e,color:#fff
     class GUARD,SM guard
-    class ADK,GEM gcp
+    class ADK,GEM,FS gcp
     class HUMAN human
 ```
 
@@ -159,6 +163,18 @@ route rather than ad hoc inside handlers.
 
 ## Deployment
 
+Two paths, because they have different prerequisites.
+
+**Firestore — no billing account.** Cloud Run requires billing enabled;
+Firestore does not, being free on the Firebase Spark plan. Since the routes
+address the store as a mapping (`store.holdings[id] = brief`), the Firestore
+backend is a write-through `MutableMapping` and no route changed. Isolation is
+a composite query filter on `org_id` and `workspace_id`, so a foreign document
+is never returned rather than filtered out afterwards, and models re-validate
+on read so the invariants are re-applied coming *out* of the database.
+
+**Cloud Run — needs billing.**
+
 ```
 gcloud run deploy --source .
         │
@@ -169,5 +185,10 @@ gcloud run deploy --source .
 ```
 
 Scale-to-zero (`--min-instances 0`) is deliberate: a PR desk's crisis tooling is
-idle most of the time, and the state that matters belongs in Postgres rather
+idle most of the time, and the state that matters belongs in Firestore rather
 than in a warm container.
+
+Either way the store selection is logged at startup, so which backend is live
+is never a guess — and an unreachable Firestore degrades to the in-memory store
+rather than refusing to boot. Losing persistence is bad; failing to start
+during a crisis is worse.

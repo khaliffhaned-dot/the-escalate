@@ -138,13 +138,19 @@ guard that lives on one branch is not a guard."
 pytest -q
 ```
 
-"Sixty-six tests, running fully offline — no credentials, so the demo path is
+"Seventy-six tests, running fully offline — no credentials, so the demo path is
 deterministic and can't fail live.
 
-Deployed on Cloud Run, Gemini 3.5 Flash through Vertex AI, scaling to zero
-because a crisis desk is idle most of the time.
+Gemini 3.5 Flash through Google ADK, with Cloud Firestore holding the data —
+tenant-scoped at the query, and re-validated on read, so you can't reintroduce
+AVE by editing a row by hand.
 
 It drafts in the hours that matter. It just can't press send."
+
+> **Shot:** Firebase console → Firestore Database → `nadi_holdings`, showing
+> real documents. This is your Google Cloud evidence. Say what it is plainly:
+> Firestore is the live persistence layer; there is no Cloud Run deployment
+> because billing was suspended. Do not imply a `.run.app` URL you don't have.
 
 ---
 

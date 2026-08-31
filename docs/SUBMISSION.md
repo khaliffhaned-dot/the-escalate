@@ -63,8 +63,9 @@ triggered by an external scheduler.
 ## How we built it
 
 **Google ADK agent, not an SDK call.** `nadi_holding_drafter` is a real
-`google.adk.agents.Agent` running Gemini 3.5 Flash through Vertex AI, with two
-properly-scoped tools:
+`google.adk.agents.Agent` running Gemini 3.5 Flash through the Gemini API (the
+Vertex AI path is implemented and tested to the credentials boundary; it awaits
+a billing-enabled project), with two properly-scoped tools:
 
 - `get_mention_detail` is a **closure built per request**, bound to exactly the
   mentions in that drafting session. The agent cannot reach a mention from
@@ -78,9 +79,19 @@ properly-scoped tools:
 Output is constrained at decode time by a Pydantic `output_schema`
 (`HoldingDraftOutput`) rather than parsed out of free text.
 
-**Stack:** Python 3.11 · FastAPI · Pydantic v2 · Google ADK · Vertex AI (Gemini
-3.5 Flash) · SQLAlchemy · PostgreSQL with row-level security · Cloud Run ·
-Cloud Build · Cloud Scheduler · vanilla-JS console served from the API origin.
+**Stack:** Python 3.11 · FastAPI · Pydantic v2 · Google ADK · Gemini 3.5 Flash ·
+**Cloud Firestore** · SQLAlchemy · PostgreSQL with row-level security ·
+vanilla-JS console served from the API origin.
+
+**Firestore is the persistence layer**, and tenant isolation lives in the
+query, not in application code afterwards. Every document carries `org_id` and
+`workspace_id`; every read is a composite filter on both, so another tenant's
+document is never returned rather than being filtered out in Python. Models
+re-validate on read, which means the product invariants (`ave=False`,
+`auto_publish=False`, `human_must_send=True`) are re-applied coming *out* of
+the database — editing a row by hand in the Firestore console cannot
+reintroduce AVE or produce a holding that publishes itself. There is a test
+that performs exactly that tampering and asserts it is neutralised.
 
 **Governance is in the type system.** `org_id` is on every row and enforced by
 Postgres RLS policies, so isolation holds at the database, not just in
@@ -110,11 +121,31 @@ one guard implementation, and eight regression tests pin that shape, including
 the case where the model emits AVE language and the system must discard the
 draft and fall back to a safe one.
 
+**The deploy env silently routed the agent away from Vertex AI.** Our Cloud Run
+configuration set only `NADI_`-prefixed variables. Those configure the app's
+own `Settings` object and are invisible to ADK, which builds its own
+`google.genai` client and resolves Vertex-vs-API-key from
+`GOOGLE_GENAI_USE_VERTEXAI` / `GOOGLE_CLOUD_PROJECT` / `GOOGLE_CLOUD_LOCATION`.
+Run it one way and you get `No API key was provided` — it went to the consumer
+API and never touched Vertex; run it the other and it reaches
+`aiplatform.googleapis.com` correctly. The failure is invisible from outside:
+the agent errors, the fallback catches it, and you get a perfectly good
+deterministic draft while the headline feature is not running. Only
+`model_version` tells you.
+
 **Making the deployment show the product.** The console was never copied into
 the container and never mounted, and its API base was hardcoded to
 `localhost:8000` — so a deployed instance would have served JSON to a browser
 and called the *viewer's own* machine for data. The same bug broke a fresh
 local clone, since the README said port 8080.
+
+**Building for Google Cloud without a billing account.** Our GCP billing was
+suspended partway through, which removed Cloud Run. Rather than drop the
+Google Cloud requirement, we looked at which qualifying services do not need
+billing: Firestore is free on the Firebase Spark plan, with no card, and a
+Firebase project is a Google Cloud project. Because the API routes talk to the
+store as a mapping (`store.holdings[id] = brief`), we could implement it as a
+write-through `MutableMapping` and change no route at all.
 
 ## Accomplishments we're proud of
 
@@ -124,7 +155,7 @@ local clone, since the README said port 8080.
   a permission check that could be missed but an object that does not exist
 - A compliance stance (`no AVE`) that survives adversarial input at four layers
   and is covered by tests
-- 66 tests that run **fully offline**, with no credentials — the demo path is
+- 76 tests that run **fully offline**, with no credentials — the demo path is
   deterministic, so it cannot fail live on stage
 - Bilingual EN/BM output treated as a first-class product requirement, not a
   translation afterthought
@@ -146,9 +177,29 @@ tools, schema, and failure modes offline. We could not verify the prose quality
 of a live Gemini run without a credentialed project. Saying exactly which is
 which turned out to be more useful than claiming both.
 
+## Google Cloud usage — and one limitation, stated plainly
+
+Against the three mandatory requirements:
+
+| Requirement | How it is met |
+|---|---|
+| Gemini 3.5 or newer, via Gemini API or Vertex AI | `gemini-3.5-flash`, through the Gemini API |
+| At least one Google Agent Framework | **Google ADK** — `google.adk.agents.Agent` with two scoped tools and a Pydantic `output_schema` |
+| At least one Google Cloud infrastructure service | **Cloud Firestore** — the live persistence layer for mentions, snapshots, war rooms and holdings |
+
+**The limitation:** our Google Cloud billing account was suspended during the
+build, so there is no Cloud Run deployment. The application is hosted
+elsewhere; Firestore on Google Cloud holds its data. We would rather say that
+outright than imply a `.run.app` URL we do not have. The Cloud Run path is
+fully written and documented in `DEPLOY_CLOUD_RUN.md` — including a deploy-env
+bug we found and fixed — and is a single `gcloud run deploy --source .` away
+the moment billing is restored.
+
 ## What's next
 
-- Cloud SQL attached so war-room state survives Cloud Run's ephemeral containers
+- Cloud Run deployment as soon as billing is restored — the configuration is
+  written, corrected and waiting
+- Cloud SQL attached so war-room state survives ephemeral containers
 - Real SMTP/webhook delivery for the weekly executive brief
 - Live connector ingest replacing the seeded demo corpus
 - SSO / SCIM for the enterprise tier
@@ -157,9 +208,9 @@ which turned out to be more useful than claiming both.
 
 ## Built With
 
-`python` · `fastapi` · `pydantic` · `google-adk` · `vertex-ai` · `gemini` ·
-`google-cloud-run` · `cloud-build` · `cloud-scheduler` · `postgresql` ·
-`sqlalchemy` · `javascript` · `docker`
+`python` · `fastapi` · `pydantic` · `google-adk` · `gemini` ·
+`google-cloud-firestore` · `firebase` · `postgresql` · `sqlalchemy` ·
+`javascript` · `docker`
 
 ---
 

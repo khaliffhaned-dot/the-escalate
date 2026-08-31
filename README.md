@@ -51,7 +51,7 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-66 tests. They run offline and need no credentials.
+76 tests. They run offline and need no credentials.
 
 ---
 
