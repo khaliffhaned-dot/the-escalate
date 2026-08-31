@@ -97,6 +97,9 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 | `NADI_GCP_LOCATION` | `asia-southeast1` | Region for that same fallback |
 | `NADI_LLM_MODEL` | `gemini-3.5-flash` | Model id |
 | `NADI_LLM_PROVIDER` | `auto` | `adk` · `vertex` · `gemini` · `openai` · `mock` |
+| `NADI_USE_FIRESTORE` | `false` | Persist to Cloud Firestore — free on Firebase Spark, no billing account |
+| `NADI_FIRESTORE_PROJECT` | *unset* | Firebase/GCP project id for Firestore |
+| `GOOGLE_APPLICATION_CREDENTIALS` | *unset* | Path to the service-account JSON for Firestore |
 | `NADI_USE_DB_STORE` | `false` | Use Postgres/SQLite instead of the in-memory demo store |
 | `NADI_DATABASE_URL` | `sqlite:///./nadi.db` | Database connection string |
 | `PORT` | `8080` | Injected by Cloud Run; do not hardcode |
@@ -106,9 +109,35 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 
 ---
 
+## Persistence — Firestore, no billing account needed
+
+Cloud Run requires billing enabled. **Firestore does not** — it is free on the
+Firebase Spark plan with no card, and a Firebase project is a Google Cloud
+project. Setting three environment variables switches the whole app onto it:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/serviceAccount.json
+export NADI_USE_FIRESTORE=true
+export NADI_FIRESTORE_PROJECT=your-project-id
+```
+
+Every document carries `org_id` and `workspace_id`, and reads are composite
+filters on both, so another tenant's document is never returned rather than
+filtered out afterwards. Models re-validate on read, so the product invariants
+are re-applied coming *out* of the database — hand-editing a row in the
+Firestore console cannot reintroduce AVE or an auto-publishing holding.
+
+If Firestore is unreachable the service logs why and falls back to the
+in-memory store rather than refusing to boot. Full walkthrough:
+[`docs/FIRESTORE_SETUP.md`](docs/FIRESTORE_SETUP.md).
+
+---
+
 ## Deploy to Cloud Run
 
 Builds remotely with Cloud Build, so **no local Docker is required**.
+Requires a billing-enabled GCP project; see the Firestore section above if you
+do not have one.
 
 ```bash
 PROJECT=$(gcloud config get-value project)

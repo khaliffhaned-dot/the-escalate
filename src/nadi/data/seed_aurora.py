@@ -17,6 +17,7 @@ from nadi.domain.enums import (
     WarRoomSeverity,
 )
 from nadi.domain.models import (
+    HoldingRef,
     LadderStage,
     Mention,
     Objective,
@@ -267,12 +268,12 @@ def seed_war_room_and_holding():
         audience="press",
     )
     wr.holdings.append(
-        {
-            "id": holding.id,
-            "brief_id": holding.brief_id,
-            "status": holding.status.value,
-            "locale": holding.locale,
-            "version": holding.version,
-        }
+        HoldingRef(
+            id=holding.id,
+            brief_id=holding.brief_id,
+            status=holding.status,
+            locale=holding.locale,
+            version=holding.version,
+        )
     )
     return wr, holding

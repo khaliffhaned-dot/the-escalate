@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     gcp_location: str = "asia-southeast1"
     database_url: str = "sqlite:///./nadi.db"
     use_db_store: bool = False
+    # Firestore (Google Cloud). Unlike Cloud Run, Firestore is available on the
+    # Firebase Spark plan with no billing account attached, so this is the
+    # persistence path that works without a card.
+    use_firestore: bool = False
+    firestore_project: str = ""
     max_mention_window_days: int = 31
 
     contribution_weights: dict[str, float] = {

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from nadi.api.deps import get_ctx, need
 from nadi.api.store import store
 from nadi.domain.enums import HoldingStatus
+from nadi.domain.models import HoldingRef
 from nadi.domain.rbac import WS_BRIEF_RUN
 from nadi.services.holding_service import draft_holding_from_mentions, reject_if_ave_requested, transition
 from nadi.services.llm_holding import generate_holding_with_llm
@@ -55,13 +56,13 @@ async def create_brief(ws_id: str, body: dict, ctx: dict = Depends(get_ctx)):
     if holding.war_room_id and holding.war_room_id in store.war_rooms:
         wr = store.war_rooms[holding.war_room_id]
         wr.holdings.append(
-            {
-                "id": holding.id,
-                "brief_id": holding.brief_id,
-                "status": holding.status.value,
-                "locale": holding.locale,
-                "version": holding.version,
-            }
+            HoldingRef(
+                id=holding.id,
+                brief_id=holding.brief_id,
+                status=holding.status,
+                locale=holding.locale,
+                version=holding.version,
+            )
         )
     return holding.model_dump(mode="json")
 

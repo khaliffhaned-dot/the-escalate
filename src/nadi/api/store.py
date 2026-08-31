@@ -1,7 +1,10 @@
-"""In-memory store for demo / pilot scaffolding."""
+"""Store selection: in-memory demo scaffolding, or Firestore when configured."""
 
 from __future__ import annotations
 
+import logging
+
+from nadi.config import settings
 from nadi.data.seed_aurora import (
     ORG,
     USER,
@@ -12,6 +15,8 @@ from nadi.data.seed_aurora import (
 )
 from nadi.domain.models import EvaluationSnapshot, HoldingBrief, Mention, WarRoom
 from nadi.services.scheduler import ReportScheduler
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryStore:
@@ -29,4 +34,27 @@ class MemoryStore:
         self.report_scheduler = ReportScheduler(persistent=False)
 
 
-store = MemoryStore()
+def build_store():
+    """Selects the store backend.
+
+    Firestore when configured, in-memory otherwise. A Firestore failure at
+    startup degrades to the in-memory store rather than taking the service
+    down — losing persistence is bad, refusing to boot during a demo is worse.
+    The chosen backend is logged either way, so which one is live is never a
+    guess.
+    """
+    if not settings.use_firestore:
+        return MemoryStore()
+
+    try:
+        from nadi.db.firestore_store import FirestoreStore
+
+        store = FirestoreStore(project_id=settings.firestore_project or None)
+        logger.info("Store backend: Firestore (project=%s)", settings.firestore_project or "default")
+        return store
+    except Exception as err:
+        logger.warning("Firestore unavailable, falling back to in-memory store: %s", err)
+        return MemoryStore()
+
+
+store = build_store()
