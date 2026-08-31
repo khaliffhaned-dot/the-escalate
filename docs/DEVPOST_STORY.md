@@ -51,9 +51,9 @@ The nasty part is that it fails *invisibly*: the agent errors, the fallback catc
 
 **A deployment that would have shown no product.** The console was never copied into the container and never mounted, and its API base was hardcoded to `localhost:8000` — so a deployed instance would have served JSON to a browser and called the *viewer's own* machine for data. The same bug broke a fresh clone, since the README said port 8080.
 
-**Building for Google Cloud without a billing account.** Our GCP billing was suspended partway through, which removed Cloud Run. Rather than drop the Google Cloud requirement, we asked which qualifying services *don't* need billing. Firestore is free on the Firebase Spark plan, with no card, and a Firebase project is a Google Cloud project. Because our routes address the store as a mapping (`store.holdings[id] = brief`), we implemented it as a write-through `MutableMapping` — and changed no route at all.
+**Building for Google Cloud without a billing account.** Our GCP account carried a billing suspension from unrelated earlier work, which removed Cloud Run. Rather than drop the Google Cloud requirement, we asked which qualifying services *don't* need billing. Firestore is free on the Firebase Spark plan, with no card, and a Firebase project is a Google Cloud project. Because our routes address the store as a mapping (`store.holdings[id] = brief`), we implemented it as a write-through `MutableMapping` — and changed no route at all.
 
-It still didn't land. The suspension turned out to cover the whole Google account, not just the billing-enabled projects, so Firebase was gone too. The integration is written, tested and in the repository; there is no live project behind it. We are reporting that as a miss rather than dressing it up.
+It still didn't land. The suspension turned out to cover the whole Google account, not just billing-enabled projects, so Firebase was gone too. The integration is written, tested and in the repository; there is no live project behind it. We are reporting that as a miss rather than dressing it up.
 
 ## Accomplishments that we're proud of
 
@@ -79,7 +79,7 @@ It still didn't land. The suspension turned out to cover the whole Google accoun
 | A Google Agent Framework | **Met** — `google.adk.agents.Agent`, two scoped tools, Pydantic `output_schema` |
 | A Google Cloud infrastructure service | **Not met** — see below |
 
-**The limitation, stated without spin:** our Google Cloud account was suspended over billing during the build, which took Cloud Run, Vertex AI and Firestore off the table with it. There is no Google Cloud infrastructure service running behind this submission, so we do not meet the third mandatory requirement.
+**The limitation, stated without spin:** our Google Cloud account was already suspended over unpaid billing from unrelated earlier work, which took Cloud Run, Vertex AI and Firestore off the table for this project. There is no Google Cloud infrastructure service running behind this submission, so we do not meet the third mandatory requirement.
 
 What we did instead of quietly dropping it: we implemented **two** Google Cloud integration paths in full, because each was reachable right up to the point where the account itself blocked us.
 

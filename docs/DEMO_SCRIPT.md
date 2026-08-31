@@ -150,8 +150,9 @@ It drafts in the hours that matter. It just can't press send."
 
 > **Shot:** `pytest -q` finishing green, then the Holdings view one last time.
 
-> **Do not claim a Google Cloud deployment.** The account was suspended over
-> billing, so there is no Cloud Run service and no live Firestore project. Both
+> **Do not claim a Google Cloud deployment.** The account carries a billing
+> suspension from unrelated earlier work, so there is no Cloud Run service and
+> no live Firestore project. Both
 > integrations are written and tested in the repo, and the Devpost story states
 > the gap outright — keep the video consistent with that. Showing the code and
 > the passing tests is honest; showing a console you don't have is not.

@@ -140,8 +140,8 @@ the container and never mounted, and its API base was hardcoded to
 and called the *viewer's own* machine for data. The same bug broke a fresh
 local clone, since the README said port 8080.
 
-**Building for Google Cloud without a billing account.** Our GCP billing was
-suspended partway through, which removed Cloud Run. Rather than drop the
+**Building for Google Cloud without a billing account.** Our GCP account carried
+a billing suspension from unrelated earlier work, which removed Cloud Run. Rather than drop the
 Google Cloud requirement, we looked at which qualifying services do not need
 billing: Firestore is free on the Firebase Spark plan, with no card, and a
 Firebase project is a Google Cloud project. Because the API routes talk to the
