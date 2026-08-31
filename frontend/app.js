@@ -1,9 +1,19 @@
 /* ===========================
    The Escalate Frontend — app.js
-   Connects to http://localhost:8000
+
+   API base resolution:
+   The FastAPI app serves this directory at "/" (see api/app.py), so in
+   both local dev and the Cloud Run deployment the API is same-origin and
+   a relative "/v1" is correct. Hardcoding a host here previously pointed
+   the deployed console at the *viewer's own* machine, which meant every
+   call failed for anyone but the developer.
+
+   The file:// branch is the one case with no origin to be relative to,
+   i.e. opening index.html directly off disk instead of through uvicorn.
    =========================== */
 
-const API = 'http://localhost:8000/v1';
+const API_ORIGIN = window.location.protocol === 'file:' ? 'http://localhost:8080' : '';
+const API = `${API_ORIGIN}/v1`;
 const WS_ID = 'ws_aurora';
 
 let currentRole = 'ws_admin';

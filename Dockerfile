@@ -18,6 +18,12 @@ COPY pyproject.toml .
 COPY src ./src
 RUN pip install --no-cache-dir -e .
 
+# The operator console. app.py mounts this directory at "/", so without it
+# the deployed service answers every non-API path with a JSON 404 and the
+# submitted Project URL shows no product at all. app.py resolves it relative
+# to the package, so /app/frontend here matches /app/src/nadi/api/app.py.
+COPY frontend ./frontend
+
 # NADI_USE_DB_STORE and NADI_DATABASE_URL are set at deploy time to point
 # at Cloud SQL (Postgres) if you want persistence across container
 # restarts, which Cloud Run does not otherwise guarantee, containers are
