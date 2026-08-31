@@ -132,7 +132,7 @@ guard that lives on one branch is not a guard."
 
 ## 3:35–3:55 · Production readiness
 
-> **Shot:** Terminal, `pytest -q`. Then the Cloud Run URL.
+> **Shot:** Terminal, `pytest -q`. Then your hosted app URL.
 
 ```bash
 pytest -q
@@ -141,16 +141,20 @@ pytest -q
 "Seventy-six tests, running fully offline — no credentials, so the demo path is
 deterministic and can't fail live.
 
-Gemini 3.5 Flash through Google ADK, with Cloud Firestore holding the data —
-tenant-scoped at the query, and re-validated on read, so you can't reintroduce
-AVE by editing a row by hand.
+Gemini 3.5 Flash through Google ADK. Postgres row-level security and a
+Firestore store that scopes every read by tenant at the query — you can't
+reintroduce AVE by editing a row by hand, because the model re-validates on
+the way out.
 
 It drafts in the hours that matter. It just can't press send."
 
-> **Shot:** Firebase console → Firestore Database → `nadi_holdings`, showing
-> real documents. This is your Google Cloud evidence. Say what it is plainly:
-> Firestore is the live persistence layer; there is no Cloud Run deployment
-> because billing was suspended. Do not imply a `.run.app` URL you don't have.
+> **Shot:** `pytest -q` finishing green, then the Holdings view one last time.
+
+> **Do not claim a Google Cloud deployment.** The account was suspended over
+> billing, so there is no Cloud Run service and no live Firestore project. Both
+> integrations are written and tested in the repo, and the Devpost story states
+> the gap outright — keep the video consistent with that. Showing the code and
+> the passing tests is honest; showing a console you don't have is not.
 
 ---
 

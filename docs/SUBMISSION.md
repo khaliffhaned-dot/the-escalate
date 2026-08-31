@@ -80,10 +80,11 @@ Output is constrained at decode time by a Pydantic `output_schema`
 (`HoldingDraftOutput`) rather than parsed out of free text.
 
 **Stack:** Python 3.11 · FastAPI · Pydantic v2 · Google ADK · Gemini 3.5 Flash ·
-**Cloud Firestore** · SQLAlchemy · PostgreSQL with row-level security ·
-vanilla-JS console served from the API origin.
+SQLAlchemy · PostgreSQL with row-level security · vanilla-JS console served
+from the API origin. Cloud Firestore and Cloud Run integrations are
+implemented but have no live project behind them — see the limitation below.
 
-**Firestore is the persistence layer**, and tenant isolation lives in the
+**The Firestore store** applies the same isolation discipline, in the
 query, not in application code afterwards. Every document carries `org_id` and
 `workspace_id`; every read is a composite filter on both, so another tenant's
 document is never returned rather than being filtered out in Python. Models
@@ -181,24 +182,39 @@ which turned out to be more useful than claiming both.
 
 Against the three mandatory requirements:
 
-| Requirement | How it is met |
+| Requirement | Status |
 |---|---|
-| Gemini 3.5 or newer, via Gemini API or Vertex AI | `gemini-3.5-flash`, through the Gemini API |
-| At least one Google Agent Framework | **Google ADK** — `google.adk.agents.Agent` with two scoped tools and a Pydantic `output_schema` |
-| At least one Google Cloud infrastructure service | **Cloud Firestore** — the live persistence layer for mentions, snapshots, war rooms and holdings |
+| Gemini 3.5 or newer, via Gemini API or Vertex AI | **Met** — `gemini-3.5-flash` through the Gemini API |
+| At least one Google Agent Framework | **Met** — `google.adk.agents.Agent` with two scoped tools and a Pydantic `output_schema` |
+| At least one Google Cloud infrastructure service | **Not met** — see below |
 
-**The limitation:** our Google Cloud billing account was suspended during the
-build, so there is no Cloud Run deployment. The application is hosted
-elsewhere; Firestore on Google Cloud holds its data. We would rather say that
-outright than imply a `.run.app` URL we do not have. The Cloud Run path is
-fully written and documented in `DEPLOY_CLOUD_RUN.md` — including a deploy-env
-bug we found and fixed — and is a single `gcloud run deploy --source .` away
-the moment billing is restored.
+**The limitation, stated without spin:** our Google Cloud account was suspended
+over billing during the build, and the suspension covered the whole account —
+taking Cloud Run, Vertex AI and Firebase/Firestore with it. No Google Cloud
+infrastructure service is running behind this submission, so the third
+mandatory requirement is not met.
+
+Rather than quietly drop it, we implemented **two** Google Cloud paths in full,
+each pursued until the account itself was the blocker:
+
+- **Cloud Run** — configured and documented end to end in
+  `DEPLOY_CLOUD_RUN.md`, including a deploy-environment bug we found and fixed
+  where the agent was silently routed to the consumer Gemini API instead of
+  Vertex AI. One `gcloud run deploy --source .` away.
+- **Cloud Firestore** — a write-through store with query-level tenant scoping,
+  10 tests, and `scripts/verify_firestore.py` to verify isolation against a
+  real project. Chosen specifically because it is free on the Firebase Spark
+  plan and needs no billing account; the account suspension, not the cost, is
+  what stopped it.
+
+Both are in the repository and both work. Neither has a live Google Cloud
+project behind it. We would rather say so plainly than imply a `.run.app` URL
+or a database we do not have.
 
 ## What's next
 
-- Cloud Run deployment as soon as billing is restored — the configuration is
-  written, corrected and waiting
+- Restore the Google Cloud account, then connect the Cloud Run and Firestore
+  paths that are already written, corrected and waiting
 - Cloud SQL attached so war-room state survives ephemeral containers
 - Real SMTP/webhook delivery for the weekly executive brief
 - Live connector ingest replacing the seeded demo corpus

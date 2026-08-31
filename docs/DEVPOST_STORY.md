@@ -31,11 +31,11 @@ The second irritation was measurement. Most of this industry still reports AVE (
 
 Output is constrained at decode time by a Pydantic `output_schema`, not parsed out of free text and hoped over.
 
-**Governance is in the type system.** `org_id` is on every row. Postgres row-level security policies enforce isolation at the database; in Firestore, every read is a composite query filter on `org_id` and `workspace_id`, so another tenant's document is never *returned* rather than filtered out in Python afterwards. A six-role RBAC matrix is checked by a FastAPI dependency on every route rather than ad hoc inside handlers.
+**Governance is in the type system.** `org_id` is on every row. Postgres row-level security policies enforce isolation at the database, and the Firestore store applies the same discipline as a composite query filter on `org_id` and `workspace_id`, so another tenant's document is never *returned* rather than filtered out in Python afterwards. A six-role RBAC matrix is checked by a FastAPI dependency on every route rather than ad hoc inside handlers.
 
 **Four independent layers** must all fail for a statement to publish itself: the system prompt, the `verify_no_ave` tool, post-processing that hardcodes the fields regardless of model output, and Pydantic validators that coerce them anyway. Plus a state machine with no self-advancing edge.
 
-**Stack:** Python 3.11 · FastAPI · Pydantic v2 · Google ADK · Gemini 3.5 Flash · Cloud Firestore · SQLAlchemy · PostgreSQL with RLS · vanilla-JS console served from the API origin.
+**Stack:** Python 3.11 · FastAPI · Pydantic v2 · Google ADK · Gemini 3.5 Flash · SQLAlchemy · PostgreSQL with RLS · vanilla-JS console served from the API origin. Cloud Firestore and Cloud Run integrations are implemented but not connected to a live project — see the limitation below.
 
 ## Challenges we ran into
 
@@ -52,6 +52,8 @@ The nasty part is that it fails *invisibly*: the agent errors, the fallback catc
 **A deployment that would have shown no product.** The console was never copied into the container and never mounted, and its API base was hardcoded to `localhost:8000` — so a deployed instance would have served JSON to a browser and called the *viewer's own* machine for data. The same bug broke a fresh clone, since the README said port 8080.
 
 **Building for Google Cloud without a billing account.** Our GCP billing was suspended partway through, which removed Cloud Run. Rather than drop the Google Cloud requirement, we asked which qualifying services *don't* need billing. Firestore is free on the Firebase Spark plan, with no card, and a Firebase project is a Google Cloud project. Because our routes address the store as a mapping (`store.holdings[id] = brief`), we implemented it as a write-through `MutableMapping` — and changed no route at all.
+
+It still didn't land. The suspension turned out to cover the whole Google account, not just the billing-enabled projects, so Firebase was gone too. The integration is written, tested and in the repository; there is no live project behind it. We are reporting that as a miss rather than dressing it up.
 
 ## Accomplishments that we're proud of
 
@@ -71,17 +73,24 @@ The nasty part is that it fails *invisibly*: the agent errors, the fallback catc
 
 ## Google Cloud usage — and one limitation, stated plainly
 
-| Requirement | How it's met |
+| Requirement | Status |
 |---|---|
-| Gemini 3.5 or newer | `gemini-3.5-flash`, through the Gemini API |
-| A Google Agent Framework | **Google ADK** — `google.adk.agents.Agent`, two scoped tools, Pydantic `output_schema` |
-| A Google Cloud infrastructure service | **Cloud Firestore** — live persistence for mentions, snapshots, war rooms and holdings |
+| Gemini 3.5 or newer | **Met** — `gemini-3.5-flash` through the Gemini API |
+| A Google Agent Framework | **Met** — `google.adk.agents.Agent`, two scoped tools, Pydantic `output_schema` |
+| A Google Cloud infrastructure service | **Not met** — see below |
 
-**The limitation:** our Google Cloud billing account was suspended during the build, so there is no Cloud Run deployment. The application is hosted elsewhere; Firestore on Google Cloud holds its data. We'd rather say that outright than imply a `.run.app` URL we don't have. The Cloud Run path is fully written and documented — including the deploy-env bug above, which we found and fixed — and is one `gcloud run deploy --source .` away the moment billing is restored.
+**The limitation, stated without spin:** our Google Cloud account was suspended over billing during the build, which took Cloud Run, Vertex AI and Firestore off the table with it. There is no Google Cloud infrastructure service running behind this submission, so we do not meet the third mandatory requirement.
+
+What we did instead of quietly dropping it: we implemented **two** Google Cloud integration paths in full, because each was reachable right up to the point where the account itself blocked us.
+
+- **Cloud Run** is configured and documented end to end — including a deploy-environment bug we found and fixed, where the agent was being silently routed to the consumer Gemini API instead of Vertex AI. One `gcloud run deploy --source .` away.
+- **Cloud Firestore** is fully implemented as a write-through store with query-level tenant scoping, covered by 10 tests, plus a script that verifies isolation against a real project. We chose it specifically because it is free on the Firebase Spark plan and needs no billing account — the account suspension, not the cost, is what stopped us.
+
+Both are in the repository and both work. Neither has a live Google Cloud project behind it. We would rather say that plainly than imply a `.run.app` URL or a database we do not have.
 
 ## What's next for The Escalate
 
-- Cloud Run deployment as soon as billing is restored — the configuration is written, corrected, and waiting
+- Restore the Google Cloud account, then connect the Cloud Run and Firestore paths that are already written and waiting
 - Real SMTP/webhook delivery for the weekly executive brief
 - Live connector ingest replacing the seeded demo corpus
 - SSO / SCIM for the enterprise tier
