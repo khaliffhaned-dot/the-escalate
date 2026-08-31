@@ -64,11 +64,20 @@ real Google ADK agent instead:
 ```bash
 # Option A — Vertex AI on Google Cloud (what the Cloud Run deploy uses)
 gcloud auth application-default login
+export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=your-project-id
+export GOOGLE_CLOUD_LOCATION=asia-southeast1
 
 # Option B — Gemini API key
 export GEMINI_API_KEY=your-key
 ```
+
+> All three `GOOGLE_*` vars are required for Option A. The ADK agent builds
+> its own `google.genai` client and resolves Vertex-vs-API-key from those
+> variables alone — the `NADI_`-prefixed settings below are invisible to it.
+> Set only `NADI_GCP_PROJECT_ID` and the agent silently calls the Gemini
+> Developer API, fails on the missing key, and falls back to the
+> deterministic draft. See [`DEPLOY_CLOUD_RUN.md`](DEPLOY_CLOUD_RUN.md).
 
 Restart the server. Drafts produced by the agent are stamped
 `model_version: adk:gemini-3.5-flash`; the offline path is stamped
@@ -80,9 +89,12 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `GOOGLE_CLOUD_PROJECT` | *unset* | Routes Gemini through Vertex AI (ADC auth) |
+| `GOOGLE_GENAI_USE_VERTEXAI` | *unset* | **Required for the agent's Vertex path** — read by the genai client, not by `Settings` |
+| `GOOGLE_CLOUD_PROJECT` | *unset* | GCP project for the agent's genai client (ADC auth) |
+| `GOOGLE_CLOUD_LOCATION` | *unset* | Vertex region for the agent's genai client |
 | `GEMINI_API_KEY` | *unset* | Direct Gemini API key |
-| `NADI_GCP_LOCATION` | `asia-southeast1` | Vertex AI region |
+| `NADI_GCP_PROJECT_ID` | *unset* | Project for this app's own `_call_vertex_ai` fallback |
+| `NADI_GCP_LOCATION` | `asia-southeast1` | Region for that same fallback |
 | `NADI_LLM_MODEL` | `gemini-3.5-flash` | Model id |
 | `NADI_LLM_PROVIDER` | `auto` | `adk` · `vertex` · `gemini` · `openai` · `mock` |
 | `NADI_USE_DB_STORE` | `false` | Use Postgres/SQLite instead of the in-memory demo store |
@@ -99,7 +111,8 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 Builds remotely with Cloud Build, so **no local Docker is required**.
 
 ```bash
-gcloud run deploy the-escalate --source . --region asia-southeast1 --allow-unauthenticated --set-env-vars GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project) --min-instances 0 --max-instances 2 --memory 512Mi
+PROJECT=$(gcloud config get-value project)
+gcloud run deploy the-escalate --source . --region asia-southeast1 --allow-unauthenticated --min-instances 0 --max-instances 2 --memory 1Gi --set-env-vars NADI_GCP_PROJECT_ID=$PROJECT,NADI_GCP_LOCATION=asia-southeast1,NADI_LLM_PROVIDER=adk,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=asia-southeast1
 ```
 
 The service account needs the **Vertex AI User** role for the agent path to

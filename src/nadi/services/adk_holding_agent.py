@@ -33,6 +33,20 @@ logger = logging.getLogger(__name__)
 
 AGENT_MODEL = "gemini-3.5-flash"
 
+# Deployment note, verified by running this both ways:
+#
+# ADK constructs its own `google.genai` client internally. That client decides
+# Vertex-vs-Gemini-Developer-API purely from the environment:
+#   GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION
+# (see google/genai/_api_client.py). It does NOT see this app's NADI_-prefixed
+# settings, which only configure `_call_vertex_ai` in llm_holding.py.
+#
+# Set NADI_GCP_PROJECT_ID alone and this agent raises "No API key was provided"
+# — it went to the consumer API and never touched Vertex. The failure is then
+# swallowed by the fallback chain and the caller gets a deterministic draft, so
+# the service looks healthy while the agent never ran. Check `model_version`
+# (`adk:` prefix) to tell the difference. See DEPLOY_CLOUD_RUN.md.
+
 
 class HoldingOp(BaseModel):
     """One operational next step. Modelled explicitly rather than as a loose

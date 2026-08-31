@@ -1,17 +1,31 @@
-# Deploying The Escalate's backend to Cloud Run
+# Deploying The Escalate to Cloud Run
 
 For the hackathon's mandatory Google Cloud infrastructure requirement, and
 the "must show Cloud Run running in the demo video" requirement. Internal
 package name stays `nadi`, only the display name changed.
 
+**This deploys the whole product, not just the API.** The image now includes
+`frontend/`, and `api/app.py` mounts it at `/`, so the `.run.app` URL opens
+the operator console directly. Earlier revisions of this guide said backend
+only; that is no longer true.
+
 ## Before anything else: the free credit
 
-The hackathon rules include $150 in free GCP credit, request it at
-https://forms.gle/riGhgDSHkHeMx8Ca6, **deadline August 28 12:00 PM PDT
-(August 29, 3:00 AM MYT), or while supplies last.** Reviewed within 72
-hours, not guaranteed. If that window has already passed for you, skip to
-the next section, everything below still works on a normal free-trial GCP
-account, just without the extra cushion.
+The hackathon rules included $150 in free GCP credit via
+https://forms.gle/riGhgDSHkHeMx8Ca6, but that window **closed on August 28
+at 12:00 PM PDT** and is past as of the submission deadline. Everything
+below works on a normal GCP free-trial account without it.
+
+## Step 0: Install the gcloud CLI
+
+Not currently installed on this machine. On Windows, either download the
+installer from <https://cloud.google.com/sdk/docs/install> or:
+
+```powershell
+winget install --id Google.CloudSDK -e
+```
+
+Then **open a new terminal** so `gcloud` lands on PATH.
 
 ## What you need before deploying
 
@@ -22,7 +36,7 @@ limits).
 ```bash
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
-gcloud services enable run.googleapis.com aiplatform.googleapis.com
+gcloud services enable run.googleapis.com aiplatform.googleapis.com cloudbuild.googleapis.com
 ```
 
 ## Step 1: Deploy
@@ -30,15 +44,33 @@ gcloud services enable run.googleapis.com aiplatform.googleapis.com
 Run this from the repo root, where the Dockerfile is:
 
 ```bash
-gcloud run deploy the-escalate-backend \
+gcloud run deploy the-escalate \
   --source . \
   --region asia-southeast1 \
   --allow-unauthenticated \
   --min-instances 0 \
   --max-instances 2 \
   --memory 1Gi \
-  --set-env-vars NADI_GCP_PROJECT_ID=YOUR_PROJECT_ID,NADI_GCP_LOCATION=asia-southeast1,NADI_LLM_PROVIDER=adk
+  --set-env-vars NADI_GCP_PROJECT_ID=YOUR_PROJECT_ID,NADI_GCP_LOCATION=asia-southeast1,NADI_LLM_PROVIDER=adk,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GOOGLE_CLOUD_LOCATION=asia-southeast1
 ```
+
+> **The three `GOOGLE_*` vars are not optional, and leaving them out fails
+> silently.** The `NADI_`-prefixed vars configure this app's own `Settings`
+> object. They are invisible to the ADK agent, which builds its own
+> `google.genai` client that resolves Vertex-vs-API-key from
+> `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_CLOUD_PROJECT` and
+> `GOOGLE_CLOUD_LOCATION` (see `google/genai/_api_client.py`).
+>
+> Verified by running the agent both ways. With `NADI_*` alone it raises
+> `ValueError: No API key was provided` — it went to the *Gemini Developer
+> API* and never touched Vertex at all. With the `GOOGLE_*` vars set it
+> reaches `aiplatform.googleapis.com` properly.
+>
+> This matters because the failure is invisible from outside: the agent
+> errors, `llm_holding.py` catches it, and you get a perfectly good
+> deterministic draft stamped `nadi-brief-2026-08-local`. The service looks
+> healthy while the headline feature is not running. Step 4 below is what
+> catches it.
 
 Notes on the flags, updated from an earlier pass now that ADK is in the
 dependency tree:
@@ -80,7 +112,7 @@ gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)"
 ## Step 3: Verify it's actually working
 
 ```bash
-SERVICE_URL=$(gcloud run services describe the-escalate-backend --region asia-southeast1 --format 'value(status.url)')
+SERVICE_URL=$(gcloud run services describe the-escalate --region asia-southeast1 --format 'value(status.url)')
 echo "$SERVICE_URL"
 curl "$SERVICE_URL/health"
 ```
@@ -113,7 +145,7 @@ falls back to `nadi-brief-2026-08-local`, something in the Vertex AI/ADK
 path failed, and Cloud Run's logs will show why:
 
 ```bash
-gcloud run services logs read the-escalate-backend --region asia-southeast1 --limit 50
+gcloud run services logs read the-escalate --region asia-southeast1 --limit 50
 ```
 
 Paste that back to me if it falls back, I'll help diagnose it against the
@@ -135,6 +167,6 @@ Options, any one satisfies it:
   still defaults to the in-memory store, meaning data resets whenever
   Cloud Run scales an idle instance down. Fine for judging, not for
   anything real.
-- No frontend deployment here, backend only. Cloud Storage + Firebase
-  Hosting would be the equivalent move for the static frontend files, not
-  built yet.
+- No CDN in front of the console. The static files are served by uvicorn
+  from the same container, which is fine at judging scale but is not how
+  you would serve them under real traffic.
