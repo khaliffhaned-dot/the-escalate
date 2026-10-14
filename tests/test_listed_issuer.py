@@ -553,3 +553,28 @@ def test_listed_routes_persist_through_a_store_that_returns_copies(monkeypatch, 
     assert saved.listed.insider_lock.insiders[0].name == "Aisha"
     assert next(c for c in saved.listed.clocks if c.key == "bursa_material").owner == "CoSec"
     assert [d.action for d in saved.decisions][-1] == "listed_clock_started"
+
+
+def test_contain_close_and_decisions_persist_through_a_copying_store(monkeypatch):
+    """Same trap as the listed routes: against Firestore every read is a copy, so
+    contain, close and add-decision were returning a change they never saved."""
+    from nadi.api.routes import war_rooms as war_room_routes
+    from nadi.domain.enums import WarRoomStatus
+
+    fs = FirestoreStore(client=FakeFirestore())
+    monkeypatch.setattr(war_room_routes, "store", fs)
+    wr_id = next(iter(fs.war_rooms))
+    base = f"/v1/workspaces/{WS}/war-rooms/{wr_id}"
+    before = len(fs.war_rooms[wr_id].decisions)
+
+    assert client.post(f"{base}/decisions", json={"action": "escalate", "note": "n"}, headers=H).status_code == 200
+    assert len(fs.war_rooms[wr_id].decisions) == before + 1
+
+    client.post(f"{base}/contain", json={"note": "contained"}, headers=H)
+    assert fs.war_rooms[wr_id].status == WarRoomStatus.CONTAINED
+    assert fs.war_rooms[wr_id].contained_at is not None
+
+    client.post(f"{base}/close", json={"note": "done"}, headers=H)
+    saved = fs.war_rooms[wr_id]
+    assert saved.status == WarRoomStatus.CLOSED and saved.closed_at is not None
+    assert [d.action for d in saved.decisions][-2:] == ["contained", "closed"]
