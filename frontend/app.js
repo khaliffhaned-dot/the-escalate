@@ -54,11 +54,18 @@ function toast(msg, type = 'info') {
 function openModal(title, bodyHTML) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHTML;
+  document.getElementById('modal').classList.remove('modal-wide');
   document.getElementById('modal-overlay').classList.add('open');
 }
 
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
+  stopListedTimer();
+}
+
+// Text from the API or the user is escaped before it goes into innerHTML.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function updateRole(val) {
@@ -644,11 +651,13 @@ function renderWarRooms() {
           <span>${(wr.holdings || []).length} holding(s)</span>
           <span>${(wr.decisions || []).length} decision(s)</span>
           ${wr.three_r?.flags?.length ? `<span style="color:var(--red)">3R: ${wr.three_r.flags.join(', ')}</span>` : ''}
+          ${wr.listed ? `<span style="color:var(--amber)">Listed · ${esc(wr.listed.market)}${wr.listed.materiality ? ' · ' + esc(wr.listed.materiality.outcome.replace(/_/g, ' ')) : ''}</span>` : ''}
         </div>
         <div class="wr-actions">
           ${canContain ? `<button class="btn-sm" onclick="containWR('${wr.id}')">Contain</button>` : ''}
           ${canClose ? `<button class="btn-sm danger" onclick="closeWR('${wr.id}')">Close</button>` : ''}
           <button class="btn-sm" onclick="addDecisionModal('${wr.id}')">Add Decision</button>
+          <button class="btn-sm" onclick="openListedPanel('${wr.id}')">Listed issuer</button>
           <button class="btn-sm" onclick="showWRDetail('${wr.id}')">Details</button>
         </div>
       </div>
@@ -764,6 +773,14 @@ function openNewWarRoomModal() {
         <option value="royalty">Royalty</option>
       </select>
     </div>
+    <div class="form-group">
+      <label class="form-label">Listed issuer (Bursa Malaysia)</label>
+      <select class="form-select" id="wr-listed">
+        <option value="">No</option>
+        <option value="main">Yes · Main Market</option>
+        <option value="ace">Yes · ACE Market</option>
+      </select>
+    </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="submitNewWarRoom()">Open War Room</button>
@@ -775,6 +792,7 @@ async function submitNewWarRoom() {
   const title = document.getElementById('wr-title').value.trim();
   const severity = document.getElementById('wr-severity').value;
   const flags = Array.from(document.getElementById('wr-3r').selectedOptions).map(o => o.value);
+  const listedMarket = document.getElementById('wr-listed').value;
   if (!title) { toast('Title is required', 'error'); return; }
   try {
     const wr = await apiFetch(`/workspaces/${WS_ID}/war-rooms`, {
@@ -783,6 +801,7 @@ async function submitNewWarRoom() {
         title, severity,
         trigger: { kind: 'manual', at: new Date().toISOString() },
         three_r: flags.length ? { flags, posture: 'self_regulated_not_directed' } : undefined,
+        listed: listedMarket ? { market: listedMarket } : undefined,
       }),
     });
     warRoomsData.push(wr);
@@ -790,6 +809,222 @@ async function submitNewWarRoom() {
     renderWarRooms();
     toast('War room opened', 'success');
   } catch (e) { toast(e.message, 'error'); }
+}
+
+
+/* ===========================
+   LISTED ISSUER (Bursa) — materiality, insider lock, clock board, halt record
+   The server computes every deadline and outcome; this panel only shows them and
+   records what a human decided. Nothing here files with Bursa or any regulator.
+   =========================== */
+let listedOpenId = null;
+let listedTimer = null;
+let listedView = null;
+
+function stopListedTimer() {
+  if (listedTimer) clearInterval(listedTimer);
+  listedTimer = null;
+  listedOpenId = null;
+}
+
+const listedPath = (wrId, path = '') => `/workspaces/${WS_ID}/war-rooms/${wrId}/listed${path}`;
+
+async function openListedPanel(wrId) {
+  const wr = warRoomsData.find(w => w.id === wrId);
+  openModal(`Listed issuer · ${wr ? wr.title : wrId}`, '<div style="color:var(--text-3)">Loading…</div>');
+  document.getElementById('modal').classList.add('modal-wide');
+  listedOpenId = wrId;
+  try {
+    listedView = await apiFetch(listedPath(wrId));
+    renderListedPanel(wrId);
+  } catch (e) {
+    document.getElementById('modal-body').innerHTML = `<div style="color:var(--red)">${esc(e.message)}</div>`;
+  }
+  if (listedTimer) clearInterval(listedTimer);
+  // Keep countdowns honest: refresh the clock board every 30 seconds while the panel is open.
+  listedTimer = setInterval(async () => {
+    if (listedOpenId !== wrId || !document.getElementById('modal-overlay').classList.contains('open')) { stopListedTimer(); return; }
+    try {
+      listedView = await apiFetch(listedPath(wrId));
+      const el = document.getElementById('li-board');
+      if (el) el.innerHTML = listedBoardHTML(wrId);
+    } catch (e) { /* keep the last good view */ }
+  }, 30000);
+}
+
+async function listedAct(wrId, path, payload, okMsg) {
+  try {
+    listedView = await apiFetch(listedPath(wrId, path), { method: 'POST', body: JSON.stringify(payload || {}) });
+    renderListedPanel(wrId);
+    loadWarRooms();
+    if (okMsg) toast(okMsg, 'success');
+    return true;
+  } catch (e) { toast(e.message, 'error'); return false; }
+}
+
+function fmtDur(mins) {
+  if (mins === null || mins === undefined) return '—';
+  const neg = mins < 0, m = Math.abs(mins);
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  const txt = d ? `${d}d ${h}h` : h ? `${h}h ${mm}m` : `${mm}m`;
+  return neg ? `${txt} overdue` : `${txt} left`;
+}
+
+function renderListedPanel(wrId) {
+  const v = listedView;
+  const body = document.getElementById('modal-body');
+  if (!v.enabled) {
+    body.innerHTML = `
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+        Listed-issuer mode adds the Bursa disclosure check, an insider lock, a regulatory clock board and a
+        trading-halt record to this war room. It records and prompts; it never files anything.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Market</label>
+        <select class="form-select" id="li-market"><option value="main">Main Market</option><option value="ace">ACE Market</option></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="listedAct('${wrId}', '/enable', { market: document.getElementById('li-market').value }, 'Listed-issuer mode enabled')">Enable listed-issuer mode</button>
+      </div>`;
+    return;
+  }
+  body.innerHTML = `
+    <div class="li-note">${esc(v.listed.verification_note)}</div>
+    <div class="li-section"><div class="detail-key">1 · Is it material? (disclosure check)</div><div id="li-materiality">${listedMaterialityHTML(wrId)}</div></div>
+    <div class="li-section"><div class="detail-key">2 · Trading halt</div><div id="li-halt">${listedHaltHTML(wrId)}</div></div>
+    <div class="li-section"><div class="detail-key">3 · Insider lock</div><div id="li-lock">${listedLockHTML(wrId)}</div></div>
+    <div class="li-section"><div class="detail-key">4 · Regulatory clock board</div><div id="li-board">${listedBoardHTML(wrId)}</div></div>
+    <div class="modal-actions"><button class="btn-secondary" onclick="closeModal()">Close</button></div>`;
+}
+
+function listedMaterialityHTML(wrId) {
+  const m = listedView.listed.materiality;
+  const tone = m ? { announce_now: 'red', withhold_and_monitor: 'amber', not_material: 'green' }[m.outcome] : '';
+  const label = m ? { announce_now: 'Announce to Bursa now', withhold_and_monitor: 'Withhold and monitor', not_material: 'Normal route: not material' }[m.outcome] : '';
+  return `
+    <div class="li-grid">
+      <label class="form-label">Could it reasonably affect the share price, or an investor's decision?
+        <select class="form-select" id="li-price">
+          <option value="yes">Yes</option><option value="unsure">Unsure (treated as yes)</option><option value="no">No</option>
+        </select></label>
+      <label class="form-label li-check"><input type="checkbox" id="li-exc"> Exceptional circumstances AND the information is fully confidential</label>
+      <label class="form-label">Any leak, rumour or unusual trading? (comma separated)
+        <input class="form-input" id="li-leaks" placeholder="e.g. unusual volume, press query"></label>
+      <div><button class="btn-sm" onclick="runMateriality('${wrId}')">Run disclosure check</button></div>
+    </div>
+    ${m ? `
+      <div class="li-banner ${tone}"><strong>${esc(label)}</strong><div>${esc(m.rationale)}</div></div>
+      <ul class="li-steps">${m.next_steps.map(s => `<li>${esc(s)}</li>`).join('')}</ul>
+      <div class="li-meta">${esc(m.basis)}</div>
+      <div style="margin-top:6px">${m.counsel_confirmed
+        ? '<span class="li-pill green">Company Secretary / counsel confirmed</span>'
+        : `<button class="btn-sm" onclick="listedAct('${wrId}', '/materiality/confirm', {}, 'Confirmation recorded')">Record Company Secretary / counsel confirmation</button>`}</div>` : ''}`;
+}
+
+function runMateriality(wrId) {
+  listedAct(wrId, '/materiality', {
+    could_affect_price: document.getElementById('li-price').value,
+    exceptional_and_confidential: document.getElementById('li-exc').checked,
+    leak_signals: document.getElementById('li-leaks').value.split(',').map(x => x.trim()).filter(Boolean),
+  }, 'Disclosure check recorded');
+}
+
+function listedHaltHTML(wrId) {
+  const p = listedView.halt_prompt, h = listedView.listed.halt;
+  const tone = { consider: 'red', after_hours: 'amber', watch: 'amber', recorded: 'green', none: '' }[p.level] || '';
+  const next = { none: ['requested'], requested: ['approved', 'declined'], approved: ['lifted'], declined: ['requested'], lifted: ['requested'] }[h.decision] || [];
+  const showButtons = p.level !== 'none' || h.decision !== 'none';
+  return `
+    <div class="li-banner ${tone}"><strong>${esc(p.headline)}</strong>
+      ${p.steps.length ? `<ul class="li-steps">${p.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+      <div class="li-meta">Market now: ${esc(p.market.status.replace('_', ' '))} (${esc(p.market.local_time)} Malaysia time). ${esc(p.market.caveat)}</div>
+      <div class="li-meta">${esc(p.basis)}</div></div>
+    <div class="li-meta">Recorded decision: <strong>${esc(h.decision)}</strong>${h.note ? ' — ' + esc(h.note) : ''}</div>
+    ${showButtons ? `
+      <div class="li-row"><input class="form-input" id="li-halt-note" placeholder="Note (e.g. phoned Bursa 10:05; approved until 5pm)">
+      ${next.map(d => `<button class="btn-sm" onclick="listedAct('${wrId}', '/halt', { decision: '${d}', note: document.getElementById('li-halt-note').value }, 'Halt ${d} recorded')">Record: ${d}</button>`).join('')}</div>` : ''}`;
+}
+
+function listedLockHTML(wrId) {
+  const lock = listedView.listed.insider_lock;
+  const rows = lock.insiders.map(i => `
+    <tr><td>${esc(i.name)}<div class="li-meta">${esc(i.role)}</div></td>
+    <td>${fmtDate(i.told_at)}</td>
+    <td>${i.notice_sent_at ? '<span class="li-pill green">sent</span>' : `<button class="btn-sm" onclick="listedAct('${wrId}', '/insiders/${i.id}/notice-sent', {}, 'Notice marked sent')">Mark sent</button>`}</td>
+    <td>${i.acknowledged_at ? '<span class="li-pill green">acknowledged</span>' : (i.notice_sent_at ? `<button class="btn-sm" onclick="listedAct('${wrId}', '/insiders/${i.id}/acknowledged', {}, 'Acknowledgement recorded')">Mark acknowledged</button>` : '—')}</td></tr>`).join('');
+  return `
+    <div class="li-meta">${lock.active ? `<span class="li-pill red">Lock active</span> since ${fmtDate(lock.started_at)}` : (lock.released_at ? `<span class="li-pill">Released</span> ${fmtDate(lock.released_at)} — ${esc(lock.release_note)}` : '<span class="li-pill amber">Not started</span> Adding the first insider starts the lock.')}</div>
+    ${rows ? `<table class="li-table"><thead><tr><th>Insider</th><th>Told at</th><th>Do-not-trade notice</th><th>Acknowledged</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
+    <div class="li-row"><input class="form-input" id="li-ins-name" placeholder="Name"><input class="form-input" id="li-ins-role" placeholder="Role">
+      <button class="btn-sm" onclick="addInsider('${wrId}')">Add to insider list</button>
+      <button class="btn-sm" onclick="draftInsiderNotice('${wrId}')">Draft notice</button></div>
+    <div id="li-notice"></div>
+    ${lock.active ? `<div class="li-row"><input class="form-input" id="li-release-note" placeholder="Release note: who told the insiders in writing, and when">
+      <button class="btn-sm danger" onclick="releaseLock('${wrId}')">Release lock</button></div>` : ''}`;
+}
+
+function addInsider(wrId) {
+  const name = document.getElementById('li-ins-name').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  listedAct(wrId, '/insiders', { name, role: document.getElementById('li-ins-role').value.trim() }, 'Insider added; lock active');
+}
+
+async function draftInsiderNotice(wrId) {
+  try {
+    const n = await apiFetch(listedPath(wrId, '/insider-notice'));
+    document.getElementById('li-notice').innerHTML = `
+      <div class="li-meta">${esc(n.review_note)}</div>
+      <textarea class="form-textarea" id="li-notice-text" style="min-height:160px">${esc(n.subject + '\n\n' + n.body)}</textarea>
+      <button class="btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('li-notice-text').value).then(() => toast('Copied. Send it through the Company Secretary.', 'success'))">Copy</button>`;
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+async function releaseLock(wrId) {
+  const note = document.getElementById('li-release-note').value.trim();
+  if (!note) { toast('A release note is required', 'error'); return; }
+  const ok = await listedAct(wrId, '/insider-lock/release', { note });
+  if (ok && listedView.unacknowledged && listedView.unacknowledged.length) {
+    toast(`Released. Not acknowledged: ${listedView.unacknowledged.join(', ')}`, 'info');
+  }
+}
+
+function listedBoardHTML(wrId) {
+  const rows = listedView.board.map(c => {
+    const stateLabel = { pending: 'pending', running: c.immediate ? 'now' : 'running', overdue: 'OVERDUE', done: 'done', not_applicable: 'n/a' }[c.state] || c.state;
+    const tone = { overdue: 'red', running: c.immediate ? 'red' : 'amber', done: 'green', pending: '', not_applicable: '' }[c.state] || '';
+    let when = '—';
+    if (c.state === 'running' || c.state === 'overdue') {
+      when = c.immediate ? `${c.elapsed_minutes} min since start` : (c.due_at ? `${fmtDur(c.minutes_remaining)}<div class="li-meta">due ${fmtDate(c.due_at)}</div>` : '<span class="li-meta">deadline is in the source document</span>');
+    } else if (c.state === 'done') when = `<span class="li-meta">done ${fmtDate(c.completed_at)}</span>`;
+    else if (c.state === 'not_applicable') when = `<span class="li-meta">${esc(c.note)}</span>`;
+    const dueInput = c.state === 'pending' && c.duration_hours === null
+      ? `<input class="form-input" type="datetime-local" id="li-due-${c.key}" title="Deadline from the source document (Malaysia time)">` : '';
+    let actions = '';
+    if (c.state === 'pending') actions = c.blocked
+      ? `<span class="li-meta">starts when ${esc(c.depends_on)} is done</span>`
+      : `<input class="form-input" id="li-own-${c.key}" placeholder="Owner" style="width:90px">${dueInput}<button class="btn-sm" onclick="startClock('${wrId}', '${c.key}', ${c.duration_hours === null})">Start</button><button class="btn-sm" onclick="clockNa('${wrId}', '${c.key}')">N/A</button>`;
+    else if (c.state === 'running' || c.state === 'overdue') actions = `<span class="li-meta">${esc(c.owner || 'no owner')}</span><button class="btn-sm" onclick="listedAct('${wrId}', '/clocks/${c.key}/done', {}, 'Clock marked done')">Done</button>`;
+    return `<tr><td><strong>${esc(c.label)}</strong><div class="li-meta">${esc(c.regulator)} · ${esc(c.window)} <span class="li-tag ${c.tag}" title="${c.tag === 'C' ? 'Corroborated by a secondary source' : 'Verify before relying on this'}">${c.tag}</span></div>
+      <div class="li-meta">${esc(c.applies_when)}</div></td>
+      <td><span class="li-pill ${tone}">${stateLabel}</span></td><td>${when}</td><td><div class="li-actions">${actions}</div></td></tr>`;
+  }).join('');
+  return `<table class="li-table"><thead><tr><th>Clock</th><th>State</th><th>Time</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="li-meta">C = corroborated by a secondary source. V = verify with counsel. None of these has been checked against the regulator's own text.</div>`;
+}
+
+function startClock(wrId, key, needsDue) {
+  const owner = (document.getElementById(`li-own-${key}`) || {}).value || '';
+  const payload = { owner: owner.trim() };
+  const due = document.getElementById(`li-due-${key}`);
+  if (needsDue && due && due.value) payload.due_at = due.value;  // naive local value is read as Malaysia time by the server
+  listedAct(wrId, `/clocks/${key}/start`, payload, 'Clock started');
+}
+
+function clockNa(wrId, key) {
+  const note = (window.prompt('Why does this clock not apply?') || '').trim();
+  if (!note) return;
+  listedAct(wrId, `/clocks/${key}/not-applicable`, { note }, 'Marked not applicable');
 }
 
 /* ===========================

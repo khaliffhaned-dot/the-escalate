@@ -5,6 +5,7 @@ from nadi.api.store import store
 from nadi.domain.enums import HoldingStatus
 from nadi.domain.models import HoldingRef
 from nadi.domain.rbac import WS_BRIEF_RUN
+from nadi.services.listed_issuer import apply_listed_guard, listed_context_for_holding
 from nadi.services.holding_service import draft_holding_from_mentions, reject_if_ave_requested, transition
 from nadi.services.llm_holding import generate_holding_with_llm
 
@@ -32,6 +33,15 @@ async def create_brief(ws_id: str, body: dict, ctx: dict = Depends(get_ctx)):
     if not mentions:
         mentions = [m for m in store.mentions if m.three_r.flags][:1]
 
+    # A listed-issuer war room tells the drafter where the Bursa announcement stands,
+    # and the same rules are re-applied to whatever comes back (see apply_listed_guard).
+    room_id = body.get("war_room_id")
+    room = store.war_rooms.get(room_id) if room_id else None
+    listed_state = room.listed if room is not None else None
+    extra_context = " ".join(
+        part for part in (body.get("extra_context"), listed_context_for_holding(listed_state)) if part
+    ) or None
+
     use_llm = body.get("use_llm", True)
     if use_llm:
         holding = await generate_holding_with_llm(
@@ -40,7 +50,7 @@ async def create_brief(ws_id: str, body: dict, ctx: dict = Depends(get_ctx)):
             locale=body.get("locale", "bilingual"),
             audience=body.get("audience", "press"),
             tabletop=bool(body.get("tabletop")),
-            extra_context=body.get("extra_context"),
+            extra_context=extra_context,
             provider=body.get("provider"),
             model=body.get("model"),
         )
@@ -52,6 +62,7 @@ async def create_brief(ws_id: str, body: dict, ctx: dict = Depends(get_ctx)):
             audience=body.get("audience", "press"),
             tabletop=bool(body.get("tabletop")),
         )
+    apply_listed_guard(holding, listed_state)
     store.holdings[holding.id] = holding
     if holding.war_room_id and holding.war_room_id in store.war_rooms:
         wr = store.war_rooms[holding.war_room_id]
@@ -64,6 +75,7 @@ async def create_brief(ws_id: str, body: dict, ctx: dict = Depends(get_ctx)):
                 version=holding.version,
             )
         )
+        store.war_rooms[wr.id] = wr  # write back: Firestore reads return copies
     return holding.model_dump(mode="json")
 
 

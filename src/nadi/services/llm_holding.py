@@ -23,8 +23,8 @@ HOLDING_JSON_SCHEMA = {
         "lines": {
             "type": "object",
             "properties": {
-                "en": {"type": "string", "description": "English holding statement lines"},
-                "bm": {"type": "string", "description": "Bahasa Melayu holding statement lines"},
+                "en": {"type": "string", "description": "English holding statement, in the six parts of the system prompt, in order"},
+                "bm": {"type": "string", "description": "Bahasa Melayu holding statement: same facts, same six parts, same order"},
             },
             "required": ["en", "bm"],
         },
@@ -100,8 +100,8 @@ TASK:
 Produce a JSON response matching the following schema strictly:
 {{
   "lines": {{
-    "en": "<English holding lines, short, sopan, grounded in facts above>",
-    "bm": "<Bahasa Melayu holding lines, natural phrasing, not mechanical translation>"
+    "en": "<English holding lines in the six parts (happened, care, confirmed, not yet confirmed, being done, what to do + next update), short, sopan, grounded in facts above>",
+    "bm": "<Bahasa Melayu holding lines, same six parts and same facts, natural phrasing, not mechanical translation>"
   }},
   "gaps": ["<gap 1>", "<gap 2>"],
   "do_not_say": ["<forbidden or ungrounded statement 1>", "<forbidden statement 2>"],
@@ -121,6 +121,7 @@ IMPORTANT INVARIANTS:
 2. Absolutely NO AVE, EMV, or PR Value.
 3. If facts are insufficient, keep lines minimal and list missing items in 'gaps'.
 4. Do not invent government, PDRM, MCMC, or Royal directives.
+5. Every holding statement commits to a next update. If no time is given, use the placeholder "[next update: time to be set by the desk]" and list it under gaps.
 """
     return prompt
 
@@ -137,34 +138,51 @@ def _generate_mock_holding(
     has_religion = "religion" in flags
     has_race = "race" in flags
 
+    # Six parts, same order in EN and BM: happened, care, confirmed, not yet
+    # confirmed, being done, what to do + next update (see prompts/holding_system.txt).
     if has_royalty or has_religion or has_race:
         en = (
             "We are aware of circulating materials and public commentary concerning a prior creative asset. "
+            "We take community sensitivities seriously and remain committed to respectful communication across all communities. "
             "The material in question has been withdrawn and is not part of our active campaign. "
-            "Our team is currently auditing all residual distribution points and retail assets. "
-            "We remain dedicated to respectful communication across all communities."
+            "We are still establishing how widely it remains in circulation, including at retail points. "
+            "Our team is auditing all residual distribution points and retail assets. "
+            "If you see the material in a shop or online, please tell us at [contact]. "
+            "We will share the next update by [next update: time to be set by the desk]."
         )
         bm = (
             "Pihak kami mengambil maklum mengenai bahan yang sedang tular dan perbincangan awam berhubung aset kreatif terdahulu. "
-            "Bahan berkenaan telah ditarik balik serta-merta dan bukan sebahagian daripada kempen aktif kami. "
-            "Pasukan kami sedang menjalankan semakan menyeluruh ke atas semua baki saluran edaran dan aset runcit. "
-            "Kami kekal komited terhadap komunikasi yang saling menghormati di kalangan semua lapisan masyarakat."
+            "Kami menghargai kepekaan masyarakat dan kekal komited terhadap komunikasi yang saling menghormati di kalangan semua lapisan masyarakat. "
+            "Bahan berkenaan telah ditarik balik dan bukan sebahagian daripada kempen aktif kami. "
+            "Kami masih mengesahkan sejauh mana bahan itu masih beredar, termasuk di premis runcit. "
+            "Pasukan kami sedang menyemak semua baki saluran edaran dan aset runcit. "
+            "Jika anda terserempak dengan bahan itu di kedai atau dalam talian, sila maklumkan kepada kami di [hubungan]. "
+            "Kemas kini seterusnya akan dikongsi menjelang [kemas kini seterusnya: masa ditetapkan oleh pasukan]."
         )
     else:
         en = (
-            "We are actively monitoring reports and community feedback regarding recent campaign materials. "
-            "We are verifying the facts across our distribution channels and will provide updates as appropriate. "
-            "Our commitment remains focused on clear and transparent communication."
+            "We are aware of reports and community feedback regarding recent campaign materials. "
+            "We take this feedback seriously and are committed to clear and transparent communication. "
+            "So far we have confirmed only that these reports are in circulation. "
+            "Whether the materials remain in use, and how widely, is not yet confirmed. "
+            "Our team is verifying the facts across our distribution channels. "
+            "If you have seen the materials, please tell us at [contact]. "
+            "We will share the next update by [next update: time to be set by the desk]."
         )
         bm = (
-            "Pihak kami sedang memantau maklum balas dan laporan komuniti mengenai bahan kempen terkini. "
-            "Kami sedang menyemak fakta merentasi seluruh saluran edaran kami dan akan mengemukakan perkembangan lanjut sekiranya perlu. "
-            "Keutamaan kami adalah mengekalkan komunikasi yang jelas dan telus."
+            "Pihak kami mengambil maklum mengenai laporan dan maklum balas komuniti berhubung bahan kempen terkini. "
+            "Kami mengambil serius maklum balas ini dan komited terhadap komunikasi yang jelas dan telus. "
+            "Setakat ini kami hanya mengesahkan bahawa laporan tersebut sedang tersebar. "
+            "Sama ada bahan itu masih digunakan, dan sejauh mana, belum disahkan. "
+            "Pasukan kami sedang menyemak fakta merentasi saluran edaran kami. "
+            "Jika anda pernah melihat bahan tersebut, sila maklumkan kepada kami di [hubungan]. "
+            "Kemas kini seterusnya akan dikongsi menjelang [kemas kini seterusnya: masa ditetapkan oleh pasukan]."
         )
 
     gaps = [
         "Verify full chain of asset distribution and physical POS presence",
         "Confirm timeline of initial social media post and engagement volume",
+        "Set the next-update time and the contact line in part 6 before sending",
     ]
     do_not_say = [
         "Any calculation or reference to AVE / EMV / PR Value",

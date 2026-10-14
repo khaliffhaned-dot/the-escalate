@@ -163,6 +163,7 @@ class WarRoomDB(Base):
     media: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     decisions: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     links: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    listed: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=_now_utc)
     opened_by: Mapped[str] = mapped_column(String(255), default="system")
     contained_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

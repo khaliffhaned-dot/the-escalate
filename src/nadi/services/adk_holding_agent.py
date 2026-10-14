@@ -71,8 +71,12 @@ class HoldingDraftOutput(BaseModel):
     highest-priority provider produced the weakest safety guidance.
     """
 
-    line_en: str = Field(description="English holding statement line, factual, no speculation.")
-    line_bm: str = Field(description="Bahasa Malaysia holding statement line, same facts as line_en.")
+    line_en: str = Field(
+        description="English holding statement in the six parts of the system prompt, in order: factual, no speculation."
+    )
+    line_bm: str = Field(
+        description="Bahasa Malaysia holding statement: same facts, same six parts, same order as line_en."
+    )
     facts_used: list[str] = Field(description="Mention IDs the draft actually drew facts from.")
     gaps: list[str] = Field(
         default_factory=list,

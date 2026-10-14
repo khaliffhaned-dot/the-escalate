@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from nadi.domain.listed import ListedIssuerState
 from nadi.domain.enums import (
     ContributionBand,
     HoldingStatus,
@@ -281,6 +282,9 @@ class WarRoom(BaseModel):
     media: dict[str, Any] = Field(default_factory=dict)
     decisions: list[Decision] = Field(default_factory=list)
     links: dict[str, Any] = Field(default_factory=dict)
+    # Set when the war room is for a Bursa-listed issuer (materiality check,
+    # insider lock, regulatory clock board, trading-halt record). See domain/listed.py.
+    listed: ListedIssuerState | None = None
     opened_at: datetime
     opened_by: str
     contained_at: datetime | None = None

@@ -10,7 +10,9 @@ from nadi.config import settings
 from nadi.domain.enums import HoldingStatus
 from nadi.domain.models import HoldingBrief, Mention
 
-_AVE_RE = re.compile(r"ave|emv|advertising\s*value|media\s*value|pr\s*value", re.I)
+# Word boundaries matter: a bare `ave` also matches "have", "save" and "available", so
+# an ordinary sentence ("We have confirmed...") tripped the guard and raised.
+_AVE_RE = re.compile(r"\b(?:ave|emv)\b|advertising\s*value|media\s*value|pr\s*value", re.I)
 
 SYSTEM_PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "holding_system.txt"
 
@@ -43,17 +45,25 @@ def draft_holding_from_mentions(
     texts = " | ".join((m.excerpt or m.text)[:180] for m in mentions)
     flags = sorted({f.value for m in mentions for f in m.three_r.flags})
 
+    # Six parts, same order in EN and BM: happened, care, confirmed, not yet
+    # confirmed, being done, what to do + next update (see prompts/holding_system.txt).
     en = (
         "We are aware of circulating materials related to a prior creative line. "
-        "Owned channels no longer use that line. We are completing a retail and residual-asset "
-        "sweep and will apply a one-line superseded notice where needed. "
-        "Current campaign creative does not use the withdrawn line."
+        "We take community sensitivities seriously and will not add to the concern with a second apology. "
+        "Owned channels no longer use that line, and current campaign creative does not use it. "
+        "We are still establishing how much of it remains in retail points. "
+        "We are completing a retail and residual-asset sweep and will apply a one-line superseded notice where needed. "
+        "If you see the material in a shop or online, please tell us at [contact]. "
+        "We will share the next update by [next update: time to be set by the desk]."
     )
     bm = (
         "Kami sedar tentang bahan yang masih beredar berkaitan baris kreatif lama. "
-        "Saluran rasmi tidak lagi menggunakan baris itu. Sapuan runcit dan aset sisa sedang "
-        "diselesaikan, dengan notis satu baris 'telah diganti' jika perlu. "
-        "Kreatif kempen semasa tidak menggunakan baris yang telah ditarik balik."
+        "Kami mengambil serius kepekaan masyarakat dan tidak akan menambah kebimbangan dengan permohonan maaf kali kedua. "
+        "Saluran rasmi tidak lagi menggunakan baris itu, dan kreatif kempen semasa tidak menggunakannya. "
+        "Kami masih mengesahkan berapa banyak yang masih ada di premis runcit. "
+        "Sapuan runcit dan aset sisa sedang diselesaikan, dengan notis satu baris 'telah diganti' jika perlu. "
+        "Jika anda terserempak dengan bahan itu di kedai atau dalam talian, sila maklumkan kepada kami di [hubungan]. "
+        "Kemas kini seterusnya akan dikongsi menjelang [kemas kini seterusnya: masa ditetapkan oleh pasukan]."
     )
     if tabletop:
         en = f"[TABLETOP — DO NOT SEND] {en}"
@@ -93,7 +103,10 @@ def draft_holding_from_mentions(
         locale=locale,
         audience=audience,
         facts_used=facts_ids,
-        gaps=["Confirm original print-run authorisation trail if asked"],
+        gaps=[
+            "Confirm original print-run authorisation trail if asked",
+            "Set the next-update time and the contact line in part 6 before sending",
+        ],
         lines={"en": en, "bm": bm},
         do_not_say=[
             "That the line was directed by any authority",
