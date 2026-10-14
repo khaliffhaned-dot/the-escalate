@@ -69,6 +69,7 @@ def contain_war_room(ws_id: str, wr_id: str, body: dict | None = None, ctx: dict
     if not wr or wr.workspace_id != ws_id:
         raise HTTPException(404, "war room not found")
     contain(wr, store.user.id, (body or {}).get("note", ""))
+    store.war_rooms[wr.id] = wr  # write back: Firestore reads return copies
     return wr.model_dump(mode="json")
 
 
@@ -79,6 +80,7 @@ def close_war_room(ws_id: str, wr_id: str, body: dict | None = None, ctx: dict =
     if not wr or wr.workspace_id != ws_id:
         raise HTTPException(404, "war room not found")
     close(wr, store.user.id, (body or {}).get("note", ""))
+    store.war_rooms[wr.id] = wr  # write back: Firestore reads return copies
     return wr.model_dump(mode="json")
 
 
@@ -89,4 +91,5 @@ def add_decision(ws_id: str, wr_id: str, body: dict, ctx: dict = Depends(get_ctx
     if not wr or wr.workspace_id != ws_id:
         raise HTTPException(404, "war room not found")
     append_decision(wr, store.user.id, body.get("action", "note"), body.get("note", ""))
+    store.war_rooms[wr.id] = wr  # write back: Firestore reads return copies
     return wr.model_dump(mode="json")
