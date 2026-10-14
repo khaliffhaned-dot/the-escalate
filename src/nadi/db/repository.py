@@ -199,6 +199,7 @@ class TenantRepository:
             d.model_dump(mode="json") if hasattr(d, "model_dump") else d
             for d in wr.decisions
         ]
+        listed_data = wr.listed.model_dump(mode="json") if wr.listed else None
         db_obj = self.db.get(WarRoomDB, wr.id)
         if not db_obj:
             db_obj = WarRoomDB(
@@ -219,6 +220,7 @@ class TenantRepository:
                 media=wr.media,
                 decisions=decisions_data,
                 links=wr.links,
+                listed=listed_data,
                 opened_at=wr.opened_at,
                 opened_by=wr.opened_by,
                 contained_at=wr.contained_at,
@@ -232,6 +234,7 @@ class TenantRepository:
             db_obj.title = wr.title
             db_obj.holdings = holdings_data
             db_obj.decisions = decisions_data
+            db_obj.listed = listed_data
             db_obj.contained_at = wr.contained_at
             db_obj.closed_at = wr.closed_at
         self.db.flush()

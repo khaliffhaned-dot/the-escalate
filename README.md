@@ -51,7 +51,9 @@ pip install -e ".[dev]"
 pytest -q
 ```
 
-76 tests. They run offline and need no credentials.
+147 tests. They run offline and need no credentials, with one exception:
+`test_webhook_validation_accepts_public_host` resolves a real hostname, so it fails
+where DNS is blocked.
 
 ---
 
@@ -163,6 +165,7 @@ src/nadi/
     adk_holding_agent.py   Google ADK agent — scoped tools, Pydantic output schema
     llm_holding.py         Provider selection + the shared text guards
     holding_service.py     Deterministic path, AVE regex, state machine
+    listed_issuer.py       Bursa disclosure check, insider lock, clock board, halt prompt
     evaluation_service.py  AMEC IEF scoring
     reporting_service.py   Executive brief compilation + HTML
     scheduler.py           Weekly report scheduling
@@ -181,13 +184,58 @@ schemas/migrations/  Postgres schema + row-level security
 | `GET` | `/v1/workspaces/{ws}/evaluation` | Live AMEC IEF evaluation |
 | `POST` | `/v1/workspaces/{ws}/evaluation/lock` | Lock snapshot — rejects `include_ave` |
 | `GET` | `/v1/workspaces/{ws}/war-rooms` | Crisis canvas |
+| `POST` | `/v1/workspaces/{ws}/war-rooms` | Open a room; add `"listed": {"market": "main"}` for a Bursa-listed issuer |
+| `GET` | `/v1/workspaces/{ws}/war-rooms/{id}/listed` | Listed-issuer view: materiality, halt prompt, insider lock, clock board |
+| `POST` | `/v1/workspaces/{ws}/war-rooms/{id}/listed/materiality` | Run the Bursa disclosure check |
+| `POST` | `/v1/workspaces/{ws}/war-rooms/{id}/listed/insiders` | Add an insider (starts the lock) |
+| `POST` | `/v1/workspaces/{ws}/war-rooms/{id}/listed/clocks/{key}/start` | Start a regulatory clock (`/done`, `/not-applicable` to close it) |
+| `POST` | `/v1/workspaces/{ws}/war-rooms/{id}/listed/halt` | Record the trading-halt decision |
 | `POST` | `/v1/workspaces/{ws}/briefs` | `{"kind":"holding","mention_ids":[...]}` |
 | `POST` | `/v1/workspaces/{ws}/holdings/{id}/transition` | draft → approved → sent_external |
 | `GET` | `/v1/workspaces/{ws}/reports/preview?snapshot_id=...` | Executive brief HTML |
 | `POST` | `/v1/workspaces/{ws}/reports/schedule` | Register a weekly brief |
 
-Auth in the demo is a header: `X-Nadi-Role: ws_admin`. Roles are `ws_admin`,
+Listed-issuer routes sit under `.../war-rooms/{id}/listed/...` and are described
+in the next section. Auth in the demo is a header: `X-Nadi-Role: ws_admin`. Roles are `ws_admin`,
 `editor`, `analyst`, `viewer`, `org_admin`, `org_auditor`.
+
+---
+
+## Listed-issuer war rooms (Bursa Malaysia)
+
+A crisis at a listed company is two crises at once: the operational or reputational
+event, and a capital-markets event. A war room opened with `"listed": {"market":
+"main"}` (or `"ace"`), or switched on later from the **Listed issuer** button in the
+console, adds four controls for the second one:
+
+| Control | What it does |
+|---------|--------------|
+| **Disclosure check** | The four-question Bursa path, applied mechanically: could it affect the price or an investor's decision (unsure counts as yes), is there an exceptional circumstance *and* complete confidentiality, any leak, rumour or unusual trading. Outcome: `not_material`, `announce_now` or `withhold_and_monitor`, with next steps. |
+| **Insider lock** | Who now holds unannounced information, when they were told, whether the do-not-trade notice was sent and acknowledged. Drafts the notice (playbook template T6). Releasing the lock needs a written reason and reports anyone who never acknowledged. |
+| **Regulatory clock board** | Twelve clocks (Bursa, UMA reply, PDPC 72 hours, affected individuals 7 days after the PDPC, NACSA, BNM, DOSH, lenders, insurers). Immediate duties show minutes since start; timed ones count down and go overdue. The 7-day individuals clock runs from the PDPC notification, not from when you click. |
+| **Trading-halt prompt** | Considers a halt when material information is unannounced and the market is open, notes after-hours, and tells you to watch when you are withholding. You record what you did (requested, approved, declined, lifted). |
+
+The holding drafter is told where the Bursa announcement stands, and the same rules
+are re-applied to whatever it writes: "do not release before the Bursa announcement",
+"never call the information material or not material in public text", and a first
+operational step for the Company Secretary. They do not depend on the model
+remembering them.
+
+```bash
+WR=$(curl -s -X POST localhost:8080/v1/workspaces/ws_aurora/war-rooms \
+  -H 'Content-Type: application/json' -H 'X-Nadi-Role: ws_admin' \
+  -d '{"title":"Ransomware at KL hub","severity":"critical","listed":{"market":"main"}}' | python -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+curl -s -X POST localhost:8080/v1/workspaces/ws_aurora/war-rooms/$WR/listed/materiality \
+  -H 'Content-Type: application/json' -H 'X-Nadi-Role: ws_admin' \
+  -d '{"could_affect_price":"yes","exceptional_and_confidential":false}'
+```
+
+**It records and prompts; it never files.** Nothing here submits to Bursa, the PDPC,
+NACSA or anyone else, and `auto_file` is forced `false` on read as well as write.
+Every change is written to the war room's decision log. The deadlines and the
+paragraph references are aids taken from secondary sources: they have **not** been
+checked against Bursa's or any regulator's own text, public holidays and half-day
+sessions are not modelled, and the Company Secretary and counsel decide.
 
 ---
 
@@ -208,6 +256,9 @@ These are enforced in code and covered by tests, not left to prompt discipline:
 5. **Tabletop drafts are marked.** A simulation draft is prefixed
    `[TABLETOP — DO NOT SEND]` / `[TABLETOP — JANGAN HANTAR]` on every path, so a
    drill can never be mistaken for a sendable statement.
+6. **Nothing files with a regulator.** `ListedIssuerState.auto_file` is forced
+   `false`, and the Postgres migration `002` carries a check constraint for the
+   same. The app records what a human decided; it does not submit.
 
 ---
 
@@ -219,6 +270,11 @@ Stated plainly rather than buried:
   drafts and war-room state reset on restart unless `NADI_USE_DB_STORE=true` and
   a database is attached. The Postgres schema and RLS policies exist in
   `schemas/migrations/`; wiring Cloud SQL is a deploy-time step.
+- **Listed-issuer rules are aids, not advice.** The disclosure path, the clock windows
+  and the Practice Note 2 halt note were built from secondary sources (law-firm notes,
+  Bursa reprimands and news reports). Bursa's own text could not be reached while
+  drafting, so paragraph numbers and exact conditions are unchecked, holidays and
+  half-day sessions are not modelled, and the Company Secretary and counsel decide.
 - **The scheduler has no in-process loop.** `POST /reports/schedules/run-due` is
   designed to be hit by an external timer (Cloud Scheduler), which is the
   correct shape for a scale-to-zero service but does mean nothing fires on its

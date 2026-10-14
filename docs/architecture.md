@@ -118,6 +118,29 @@ the tool and the API can never drift apart.
 ADK's `output_schema`, so the model is constrained at decode time rather than
 producing free text that is parsed and hoped over.
 
+## Listed-issuer war rooms
+
+A war room can carry a `ListedIssuerState` (`domain/listed.py`): the disclosure
+assessment, the insider lock, twelve regulatory clocks and the halt record. The logic
+is pure functions in `services/listed_issuer.py`, so every rule is tested without a
+store or a clock; `api/routes/listed.py` is a thin wrapper.
+
+Three boundaries matter:
+
+- **It records and prompts.** There is no path that files with Bursa or any regulator,
+  and `auto_file` is forced `false` the same way `auto_publish` is on a holding.
+- **Routes write the room back.** `FirestoreDocMap` returns a fresh copy on every read,
+  so mutating the object a route read is lost unless it is assigned back. The listed
+  routes always do `store.war_rooms[id] = wr`, and a test drives them against a store
+  that returns copies.
+- **The holding guard runs after the model.** `apply_listed_guard` adds the Bursa-first
+  rules to the brief whichever provider produced it, in the same place the AVE scan and
+  the tabletop marker are applied, so they do not rely on the prompt being followed.
+
+Storage: one nullable JSON column `listed` on `war_rooms`
+(`schemas/migrations/002_war_room_listed_issuer.sql`). The row-level-security policy
+from `001` already covers the whole row.
+
 ## Why the guards sit outside the agent
 
 Every provider path — ADK, Vertex AI, direct Gemini, OpenAI, deterministic —
