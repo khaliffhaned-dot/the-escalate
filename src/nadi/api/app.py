@@ -12,7 +12,7 @@ from nadi.api.store import store
 FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend"
 
 app = FastAPI(
-    title="The Escalate API",
+    title="ESCALATE™ API",
     description="The pulse of Malaysia — social listening & AMEC Evaluation. No AVE.",
     version=__version__,
 )
