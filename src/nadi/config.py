@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="NADI_", env_file=".env", extra="ignore")
 
-    app_name: str = "The Escalate"
+    app_name: str = "ESCALATE™"
     api_prefix: str = "/v1"
     default_timezone: str = "Asia/Kuala_Lumpur"
     default_region: str = "ap-southeast-1"

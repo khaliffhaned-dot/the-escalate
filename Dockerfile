@@ -1,4 +1,4 @@
-# Cloud Run deployment for The Escalate's backend (internal package name
+# Cloud Run deployment for ESCALATE™'s backend (internal package name
 # remains `nadi`, imports below are unchanged).
 #
 # Cloud Run listens on $PORT (injected by the platform, do not hardcode 8080
@@ -29,7 +29,7 @@ COPY frontend ./frontend
 # restarts, which Cloud Run does not otherwise guarantee, containers are
 # ephemeral. Left unset, this falls back to the in-memory demo store,
 # same limitation documented in CHANGES_REPORTING.md.
-ENV NADI_APP_NAME="The Escalate"
+ENV NADI_APP_NAME="ESCALATE™"
 
 EXPOSE 8080
 

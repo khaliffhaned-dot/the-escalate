@@ -4,7 +4,7 @@ Malaysian PR desks work inside a boundary most crisis tooling ignores: **3R** �
 
 The obvious agentic answer is "an agent that monitors and responds." That answer is wrong, and dangerously so. An agent that can publish on a brand's behalf into a 3R-sensitive moment is an unbounded liability. But an agent that does nothing until a human wakes up wastes the only hours that matter.
 
-The Escalate takes the third option: **the agent does all the work up to the send, and the send is structurally unreachable to it.** Not "we prompted it not to" — structurally.
+ESCALATE™ takes the third option: **the agent does all the work up to the send, and the send is structurally unreachable to it.** Not "we prompted it not to" — structurally.
 
 The second irritation was measurement. Most of this industry still reports AVE (Advertising Value Equivalency), a metric the Barcelona Principles have rejected since 2010 because it invents a number. We wanted a system where reporting AVE isn't a policy someone can override — it's a value the code refuses to hold.
 
@@ -88,7 +88,7 @@ What we did instead of quietly dropping it: we implemented **two** Google Cloud 
 
 Both are in the repository and both work. Neither has a live Google Cloud project behind it. We would rather say that plainly than imply a `.run.app` URL or a database we do not have.
 
-## What's next for The Escalate
+## What's next for ESCALATE™
 
 - Restore the Google Cloud account, then connect the Cloud Run and Firestore paths that are already written and waiting
 - Real SMTP/webhook delivery for the weekly executive brief

@@ -1,5 +1,5 @@
 /* ===========================
-   The Escalate Frontend — app.js
+   ESCALATE™ Frontend — app.js
 
    API base resolution:
    The FastAPI app serves this directory at "/" (see api/app.py), so in

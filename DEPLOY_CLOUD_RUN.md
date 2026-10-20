@@ -1,4 +1,4 @@
-# Deploying The Escalate to Cloud Run
+# Deploying ESCALATE™ to Cloud Run
 
 For the hackathon's mandatory Google Cloud infrastructure requirement, and
 the "must show Cloud Run running in the demo video" requirement. Internal

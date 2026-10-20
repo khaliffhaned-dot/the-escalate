@@ -1,4 +1,4 @@
-# Devpost submission copy — The Escalate
+# Devpost submission copy — ESCALATE™
 
 Paste-ready text for each Devpost field. Track recommendation and the reasoning
 behind it are at the bottom.
@@ -24,7 +24,7 @@ answer is wrong, and dangerously so. An agent that can publish on behalf of a
 brand into a 3R-sensitive moment is an unbounded liability. But an agent that
 does nothing until a human is awake wastes the only hours that matter.
 
-The Escalate takes the third option: **the agent does all the work up to the
+ESCALATE™ takes the third option: **the agent does all the work up to the
 send, and the send is structurally unreachable to it.** Not "we prompted it not
 to" — structurally.
 

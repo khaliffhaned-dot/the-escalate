@@ -1,4 +1,4 @@
-# The Escalate
+# ESCALATE™
 
 **A governed crisis-response desk for Malaysian PR teams.** It watches the
 conversation, escalates 3R-sensitive incidents into a war room, and drafts a
@@ -6,6 +6,8 @@ bilingual holding statement with a Google ADK agent that *structurally cannot
 send it alone*.
 
 Built for the **All Things Agentic Hackathon** (Google).
+
+> ESCALATE™ is a name used by the author. The ™ sign does not mean the name is registered.
 
 > *Internal package name remains `nadi`. Imports and CLI commands below use it.*
 

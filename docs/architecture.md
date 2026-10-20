@@ -1,6 +1,6 @@
 # Architecture
 
-The Escalate is a FastAPI service that serves both its API and its operator
+ESCALATE™ is a FastAPI service that serves both its API and its operator
 console from one origin, persisting to Cloud Firestore. The interesting part is
 not the request path — it is where the **guards** sit relative to the agent.
 

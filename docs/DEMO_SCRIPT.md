@@ -36,7 +36,7 @@ only hours that matter."
 > **Shot:** Stay on Dashboard. Point at the `Barcelona 4.0 · AVE Disabled`
 > badge in the header, then the PESO Ladder.
 
-"The Escalate takes the third option. The agent does **all** the work up to the
+"ESCALATE™ takes the third option. The agent does **all** the work up to the
 send — and the send is structurally unreachable to it.
 
 It also refuses to lie about results. This desk measures contribution on the
