@@ -66,7 +66,7 @@ always works. Provide **either** of the following to route drafting through the
 real Google ADK agent instead:
 
 ```bash
-# Option A — Vertex AI on Google Cloud (what the Cloud Run deploy uses)
+# Option A — Vertex AI on Google Cloud
 gcloud auth application-default login
 export GOOGLE_GENAI_USE_VERTEXAI=true
 export GOOGLE_CLOUD_PROJECT=your-project-id
@@ -81,7 +81,7 @@ export GEMINI_API_KEY=your-key
 > variables alone — the `NADI_`-prefixed settings below are invisible to it.
 > Set only `NADI_GCP_PROJECT_ID` and the agent silently calls the Gemini
 > Developer API, fails on the missing key, and falls back to the
-> deterministic draft. See [`DEPLOY_CLOUD_RUN.md`](DEPLOY_CLOUD_RUN.md).
+> deterministic draft.
 
 Restart the server. Drafts produced by the agent are stamped
 `model_version: adk:gemini-3.5-flash`; the offline path is stamped
@@ -106,7 +106,7 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 | `GOOGLE_APPLICATION_CREDENTIALS` | *unset* | Path to the service-account JSON for Firestore |
 | `NADI_USE_DB_STORE` | `false` | Use Postgres/SQLite instead of the in-memory demo store |
 | `NADI_DATABASE_URL` | `sqlite:///./nadi.db` | Database connection string |
-| `PORT` | `8080` | Injected by Cloud Run; do not hardcode |
+| `PORT` | `8080` | Local server port |
 
 `NADI_AVE_ENABLED` exists but is inert by design — see
 [Product invariants](#product-invariants).
@@ -115,8 +115,7 @@ All settings take a `NADI_` prefix and may also come from a `.env` file.
 
 ## Persistence — Firestore, no billing account needed
 
-Cloud Run requires billing enabled. **Firestore does not** — it is free on the
-Firebase Spark plan with no card, and a Firebase project is a Google Cloud
+**Firestore is free on the Firebase Spark plan** with no card, and a Firebase project is a Google Cloud
 project. Setting three environment variables switches the whole app onto it:
 
 ```bash
@@ -137,28 +136,11 @@ in-memory store rather than refusing to boot. Full walkthrough:
 
 ---
 
-## Deploy to Cloud Run
-
-Builds remotely with Cloud Build, so **no local Docker is required**.
-Requires a billing-enabled GCP project; see the Firestore section above if you
-do not have one.
-
-```bash
-PROJECT=$(gcloud config get-value project)
-gcloud run deploy the-escalate --source . --region asia-southeast1 --allow-unauthenticated --min-instances 0 --max-instances 2 --memory 1Gi --set-env-vars NADI_GCP_PROJECT_ID=$PROJECT,NADI_GCP_LOCATION=asia-southeast1,NADI_LLM_PROVIDER=adk,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=asia-southeast1
-```
-
-The service account needs the **Vertex AI User** role for the agent path to
-work. Cost-conscious defaults (`--min-instances 0`) mean the service scales to
-zero when idle. Full walkthrough and troubleshooting: [`DEPLOY_CLOUD_RUN.md`](DEPLOY_CLOUD_RUN.md).
-
----
-
 ## Deploy to Cloudflare (Workers + Assets + D1)
 
-An edge path is available under `cloudflare/`. It serves the same operator
+The edge path lives under `cloudflare/`. It serves the same operator
 console via Workers Assets and exposes a Hono API. Persistence is D1
-(SQLite). The Google ADK / Vertex path stays on the Cloud Run deploy.
+(SQLite).
 
 ```bash
 cd cloudflare
@@ -286,17 +268,14 @@ These are enforced in code and covered by tests, not left to prompt discipline:
 
 Stated plainly rather than buried:
 
-- **The in-memory store is the default.** Cloud Run containers are ephemeral, so
-  drafts and war-room state reset on restart unless `NADI_USE_DB_STORE=true` and
-  a database is attached. The Postgres schema and RLS policies exist in
-  `schemas/migrations/`; wiring Cloud SQL is a deploy-time step.
+- **The in-memory store is the default.** Drafts and war-room state reset on restart unless `NADI_USE_DB_STORE=true` and a database is attached. The Postgres schema and RLS policies exist in `schemas/migrations/`.
 - **Listed-issuer rules are aids, not advice.** The disclosure path, the clock windows
   and the Practice Note 2 halt note were built from secondary sources (law-firm notes,
   Bursa reprimands and news reports). Bursa's own text could not be reached while
   drafting, so paragraph numbers and exact conditions are unchecked, holidays and
   half-day sessions are not modelled, and the Company Secretary and counsel decide.
 - **The scheduler has no in-process loop.** `POST /reports/schedules/run-due` is
-  designed to be hit by an external timer (Cloud Scheduler), which is the
+  designed to be hit by an external timer, which is the
   correct shape for a scale-to-zero service but does mean nothing fires on its
   own until that trigger is configured.
 - **Report delivery is not implemented.** Schedules compile the brief and record
