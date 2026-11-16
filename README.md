@@ -154,6 +154,23 @@ zero when idle. Full walkthrough and troubleshooting: [`DEPLOY_CLOUD_RUN.md`](DE
 
 ---
 
+## Deploy to Cloudflare (Workers + Assets + D1)
+
+An edge path is available under `cloudflare/`. It serves the same operator
+console via Workers Assets and exposes a Hono API. Persistence is D1
+(SQLite). The Google ADK / Vertex path stays on the Cloud Run deploy.
+
+```bash
+cd cloudflare
+npm install
+npx wrangler d1 create escalate-d1   # paste id into wrangler.toml
+npx wrangler dev
+```
+
+Full steps: [`DEPLOY_CLOUDFLARE.md`](DEPLOY_CLOUDFLARE.md).
+
+---
+
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the full diagram and the
@@ -176,6 +193,7 @@ src/nadi/
   db/                SQLAlchemy models, repository, session
   data/              Aurora / Jalur Kita demo seed
 schemas/migrations/  Postgres schema + row-level security
+cloudflare/          Hono Worker + Assets + D1 skeleton for edge deploy
 ```
 
 ### Key routes
