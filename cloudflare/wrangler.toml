@@ -1,0 +1,21 @@
+name = "the-escalate"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../frontend"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "escalate-d1"
+database_id = "" # fill after `wrangler d1 create escalate-d1`
+
+[vars]
+NADI_AVE_ENABLED = "false"
+ENVIRONMENT = "production"
+
+# AI Gateway for Gemini (optional)
+# [ai]
+# binding = "AI"
